@@ -1,18 +1,18 @@
-### **Vytruve Org AI - End User License Agreement (EULA)**
+### **vyAI - A division of Vytruve Org.- End User License Agreement (EULA)**
 
 
-**Vytruve Org AI Software License Agreement**
+**vyAI - A division of Vytruve Org.Software License Agreement**
 
 **Copyright © 2025 Vytruve Org. Designed by Pedro H. Garcia.**
 **All Rights Reserved.**
 
-This End User License Agreement ("EULA") is a legally binding contract between you, either an individual or a single entity ("Licensee" or "You"), and Vytruve Org ("Licensor"), the author and owner of the artificial intelligence software known as "Vytruve Org AI" ("Software").
+This End User License Agreement ("EULA") is a legally binding contract between you, either an individual or a single entity ("Licensee" or "You"), and Vytruve Org ("Licensor"), the author and owner of the artificial intelligence software known as "vyAI" ("Software").
 
 By installing, copying, downloading, or otherwise using the Software, you agree to be bound by the terms and conditions set forth in this EULA. If you do not agree to these terms, do not install or use the Software.
 
 **DEFINITIONS**
 
-a) **"Software"** refers to the Vytruve Org AI program, including any and all associated files, data, models, and documentation provided with it.
+a) **"Software"** refers to the vyAI - A division of Vytruve Org.program, including any and all associated files, data, models, and documentation provided with it.
 b) **"Use"** means to access, install, download, or otherwise benefit from using the functionality of the Software.
 c) **"Personal Use"** refers to the use of the Software for non-commercial purposes on a personal device. This includes educational, research, and study purposes by an individual.
 d) **"Commercial Use"** refers to any use of the Software for direct or indirect financial gain, including but not limited to selling, licensing, renting, or integrating it into a product or service offered for a fee.
@@ -73,20 +73,20 @@ e) **"Customized Physical Product"** refers to a tangible, physical hardware ite
 
 ---
 
-### **Vytruve Org AI - End User License Agreement (EULA)**
+### **vyAI - A division of Vytruve Org.- End User License Agreement (EULA)**
 
-**Contrato de Licença de Software Vytruve Org AI**
+**Contrato de Licença de Software vyAI**
 
 **Copyright © 2025 Vytruve Org. Designed by Pedro H. Garcia.**
 **Todos os direitos reservados.**
 
-Este Contrato de Licença de Usuário Final ("EULA") é um contrato legalmente vinculativo entre você, seja um indivíduo ou uma única entidade ("Licenciado" ou "Você"), e a Vytruve Org ("Licenciante"), o autor e proprietário do software de inteligência artificial conhecido como "Vytruve Org AI" ("Software").
+Este Contrato de Licença de Usuário Final ("EULA") é um contrato legalmente vinculativo entre você, seja um indivíduo ou uma única entidade ("Licenciado" ou "Você"), e a Vytruve Org ("Licenciante"), o autor e proprietário do software de inteligência artificial conhecido como "vyAI" ("Software").
 
 Ao instalar, copiar, baixar ou de outra forma utilizar o Software, você concorda em se vincular aos termos e condições estabelecidos neste EULA. Se você não concordar com estes termos, não instale ou utilize o Software.
 
 **DEFINIÇÕES**
 
-a) **"Software"** refere-se ao programa Vytruve Org AI, incluindo todos e quaisquer arquivos, dados, modelos e documentação associados fornecidos com ele.
+a) **"Software"** refere-se ao programa vyAI, incluindo todos e quaisquer arquivos, dados, modelos e documentação associados fornecidos com ele.
 b) **"Uso"** significa acessar, instalar, baixar ou de outra forma se beneficiar da funcionalidade do Software.
 c) **"Uso Pessoal"** refere-se ao uso do Software para fins não comerciais em um dispositivo pessoal. Isso inclui fins educacionais, de pesquisa e de estudo por um indivíduo.
 d) **"Uso Comercial"** refere-se a qualquer uso do Software para ganho financeiro direto ou indireto, incluindo, mas não se limitando a, vender, licenciar, alugar ou integrá-lo a um produto ou serviço oferecido mediante pagamento.
@@ -147,20 +147,20 @@ e) **"Produto Físico Personalizado"** refere-se a um item de hardware físico e
 
 ---
 
-### **Vytruve Org AI - End User License Agreement (EULA)**
+### **vyAI - A division of Vytruve Org.- End User License Agreement (EULA)**
 
-**Acuerdo de Licencia de Software Vytruve Org AI**
+**Acuerdo de Licencia de Software vyAI**
 
 **Copyright © 2025 Vytruve Org. Designed by Pedro H. Garcia.**
 **Todos los derechos reservados.**
 
-Este Acuerdo de Licencia de Usuario Final ("EULA") es un contrato legalmente vinculante entre usted, ya sea un individuo o una entidad única ("Licenciatario" o "Usted"), y Vytruve Org ("Licenciante"), el autor y propietario del software de inteligencia artificial conocido como "Vytruve Org AI" ("Software").
+Este Acuerdo de Licencia de Usuario Final ("EULA") es un contrato legalmente vinculante entre usted, ya sea un individuo o una entidad única ("Licenciatario" o "Usted"), y Vytruve Org ("Licenciante"), el autor y propietario del software de inteligencia artificial conocido como "vyAI" ("Software").
 
 Al instalar, copiar, descargar o utilizar de cualquier otro modo el Software, usted acepta regirse por los términos y condiciones establecidos en este EULA. Si no está de acuerdo con estos términos, no instale ni utilice el Software.
 
 **DEFINICIONES**
 
-a) **"Software"** se refiere al programa Vytruve Org AI, incluyendo todos y cada uno de los archivos, datos, modelos y documentación asociados que se proporcionan con él.
+a) **"Software"** se refiere al programa vyAI, incluyendo todos y cada uno de los archivos, datos, modelos y documentación asociados que se proporcionan con él.
 b) **"Uso"** significa acceder, instalar, descargar o beneficiarse de cualquier otra manera de la funcionalidad del Software.
 c) **"Uso Personal"** se refiere al uso del Software para fines no comerciales en un dispositivo personal. Esto incluye fines educativos, de investigación y de estudio por parte de un individuo.
 d) **"Uso Comercial"** se refiere a cualquier uso del Software para obtener un beneficio financiero directo o indirecto, incluyendo, entre otros, vender, licenciar, alquilar o integrarlo en un producto o servicio ofrecido a cambio de una tarifa.

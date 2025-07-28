@@ -8,7 +8,7 @@
 # Variables:
 #   BUILD_TYPE  - The build type for CMake (Debug, Release, RelWithDebInfo).
 #                 Default: Release
-#   BUILD_DIR   - The directory where all build artifacts will be stored.
+#   BUILD_DIR   - The directory where all build artifacts will be sxtored.
 #                 Default: build/
 #
 
