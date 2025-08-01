@@ -1,5 +1,7 @@
-                       vyAI Social Commons 1.0
-                       Version 1, 01 August 2025
+
+
+                      vyAI Social Commons 1.0
+                       Version 1.1, 01 August 2025
 
  Copyright (C) 2025 vyAI, a division of Vytruve Organization. <https://vytruve.org/>
  Everyone is permitted to copy and distribute verbatim copies
@@ -17,19 +19,19 @@ The precise terms and conditions for copying, distribution, and modification fol
 
 0. Definitions.
 
-"This License" refers to version 1 of the vyAI Social Commons 1.0 License.
+"This License" refers to version 1.1 of the vyAI Social Commons 1.0 License.
 
 "The Program" refers to any copyrightable work licensed under this License. Each licensee is addressed as "you". "Licensees" and "recipients" may be individuals or organizations.
 
-"To "modify" a work means to copy from or adapt all or part of the work in a fashion requiring copyright permission, other than the making of an exact copy. The resulting work is called a "modified version" of the earlier work or a work "based on" the earlier work.
+To "modify" a work means to copy from or adapt all or part of the work in a fashion requiring copyright permission, other than the making of an exact copy. The resulting work is called a "modified version" of the earlier work or a work "based on" the earlier work.
 
-"A "covered work" means the unmodified Program or a work based on the Program.
+A "covered work" means the unmodified Program or a work based on the Program.
 
-"To "propagate" a work means to do anything with it that, without permission, would make you directly or secondarily liable for infringement under applicable copyright law, except executing it on a computer or modifying a private copy. Propagation includes copying, distribution (with or without modification), making available to the public, and in some countries other activities as well.
+To "propagate" a work means to do anything with it that, without permission, would make you directly or secondarily liable for infringement under applicable copyright law, except executing it on a computer or modifying a private copy. Propagation includes copying, distribution (with or without modification), making available to the public, and in some countries other activities as well.
 
-"To "convey" a work means any kind of propagation that enables other parties to make or receive copies. Mere interaction with a user through a computer network, with no transfer of a copy, is not conveying.
+To "convey" a work means any kind of propagation that enables other parties to make or receive copies. Mere interaction with a user through a computer network, with no transfer of a copy, is not conveying.
 
-"Software as a Service (SaaS)" refers to a model where a covered work is hosted by a party and provided to customers over a network, typically on a subscription or fee basis, without conveying a copy of the software itself.
+"Software as a Service (SaaS)" refers to any model where a covered work is hosted by a party and made available to third parties over a network. This includes, but is not limited to, offering access via an Application Programming Interface (API) or other remote means, where the core functionality or primary value provided to the end-user is substantially derived from the covered work.
 
 "Physical Product" refers to a tangible, physical hardware item (e.g., robots, wearables, custom devices) that is sold to an end-user and in which the Software is embedded or integrated.
 
@@ -37,15 +39,11 @@ The precise terms and conditions for copying, distribution, and modification fol
 
 All rights granted under this License are granted for the term of copyright on the Program, and are irrevocable provided the stated conditions are met. This License explicitly affirms your unlimited permission to run the unmodified Program. The output from running a covered work is covered by this License only if the output, given its content, constitutes a covered work.
 
-You may make, run and propagate covered works that you do not convey, without conditions so long as your license otherwise remains in force. You may convey covered works to others for the sole purpose of having them make modifications exclusively for you, or provide you with facilities for running those works, provided that you comply with the terms of this License in conveying all material for which you do not control copyright. Those thus making or running the covered works for you must do so exclusively on your behalf, under your direction and control, on terms that prohibit them from making any copies of your copyrighted material outside their relationship with you.
-
-Conveying under any other circumstances is permitted solely under the conditions stated below. Sublicensing is not allowed; section 8 makes it unnecessary.
+You may make, run and propagate covered works that you do not convey, without conditions so long as your license otherwise remains in force.
 
 2. Verbatim Copies.
 
-You may convey verbatim copies of the Program's source code as you receive it, in any medium, provided that you conspicuously and appropriately publish on each copy an appropriate copyright notice; keep intact all notices stating that this License and any non-permissive terms added in accord with section 7 apply to the code; keep intact all notices of the absence of any warranty; and give all recipients a copy of this License along with the Program.
-
-You may charge any price or no price for each copy that you convey, and you may offer support or warranty protection for a fee.
+You may convey verbatim copies of the Program's source code as you receive it, in any medium, provided that you conspicuously and appropriately publish on each copy an appropriate copyright notice; keep intact all notices stating that this License applies to the code; keep intact all notices of the absence of any warranty; and give all recipients a copy of this License along with the Program.
 
 3. Conveying Modified Source Versions.
 
@@ -55,11 +53,11 @@ You may convey a work based on the Program, or the modifications to produce it f
     b) The work must carry prominent notices stating that it is released under this License.
     c) You must license the entire work, as a whole, under this License to anyone who comes into possession of a copy.
 
-4. Commercial Use Restrictions.
+4. Commercial and Service Restrictions.
 
-It is strictly prohibited to sell, rent, lease, license, sublicense, or otherwise monetize access to the Program or any covered work as a standalone software product.
+    a) Prohibition on Direct Sale: It is strictly prohibited to sell, rent, lease, license, sublicense, or otherwise monetize access to the Program or any covered work as a standalone software product.
 
-You may not offer the Program or any covered work as part of a paid service, subscription model, or any form of "Software as a Service" (SaaS), Platform as a Service (PaaS), or Infrastructure as a Service (IaaS).
+    b) Prohibition on Providing as a Service: You may not offer the Program or any covered work as a "Software as a Service" (SaaS), Platform as a Service (PaaS), or Infrastructure as a Service (IaaS). This restriction applies to any service whose primary value or core functionality is derived directly or indirectly from the Program, including services that provide access to the Program's features via an API or other remote interface for a fee.
 
 5. Exception for Physical Products and Ancillary Services.
 
@@ -87,15 +85,15 @@ However, if you cease all violation of this License, then your license from a pa
 
 9. Acceptance Not Required for Having Copies.
 
-You are not required to accept this License in order to receive or run a copy of the Program. Ancillary propagation of a covered work occurring solely as a consequence of using peer-to-peer transmission to receive a copy likewise does not require acceptance. However, nothing other than this License grants you permission to propagate or modify any covered work. These actions infringe copyright if you do not accept this License. Therefore, by modifying or propagating a covered work, you indicate your acceptance of this License to do so.
+You are not required to accept this License in order to receive or run a copy of the Program. However, nothing other than this License grants you permission to propagate or modify any covered work. These actions infringe copyright if you do not accept this License. Therefore, by modifying or propagating a covered work, you indicate your acceptance of this License to do so.
 
 10. Disclaimer of Warranty.
 
-There is NO WARRANTY for the program, to the extent permitted by applicable law. Except when otherwise stated in writing the copyright holders and/or other parties provide the program "AS IS" without warranty of any kind, either expressed or implied, including, but not limited to, the implied warranties of merchantability and fitness for a particular purpose. The entire risk as to the quality and performance of the program is with you. Should the program prove defective, you assume the cost of all necessary servicing, repair or correction.
+THERE IS NO WARRANTY FOR THE PROGRAM, TO THE EXTENT PERMITTED BY APPLICABLE LAW. EXCEPT WHEN OTHERWISE STATED IN WRITING THE COPYRIGHT HOLDERS AND/OR OTHER PARTIES PROVIDE THE PROGRAM "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE PROGRAM IS WITH YOU.
 
 11. Limitation of Liability.
 
-In no event unless required by applicable law or agreed to in writing will any copyright holder, or any other party who modifies and/or conveys the program as permitted above, be liable to you for damages, including any general, special, incidental or consequential damages arising out of the use or inability to use the program (including but not limited to loss of data or data being rendered inaccurate or losses sustained by you or third parties or a failure of the program to operate with any other programs), even if such holder or other party has been advised of the possibility of such damages.
+IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING WILL ANY COPYRIGHT HOLDER, OR ANY OTHER PARTY WHO MODIFIES AND/OR CONVEYS THE PROGRAM AS PERMITTED ABOVE, BE LIABLE TO YOU FOR DAMAGES, INCLUDING ANY GENERAL, SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE USE OR INABILITY TO USE THE PROGRAM, EVEN IF SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
 
 12. Interpretation of Sections 10 and 11.
 
