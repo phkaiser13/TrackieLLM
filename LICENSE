@@ -1,14 +1,14 @@
-                     vyAI Social Commons 1.0
+                        vyAI Social Commons 1.1
                       Version 1.1, 01 August 2025
 
  Copyright (C) 2025 vyAI, a division of Vytruve Organization.
-               <https://vytruve.org/>
+               <https://vytruve.org/licenses/vyai-social-commons-1.1.html>
  Everyone is permitted to copy and distribute verbatim copies of this license
  document, but changing it is not allowed.
 
                              Preamble
 
-The vyAI Social Commons 1.0 License is a free, open-source license designed to
+The vyAI Social Commons 1.1 License is a free, open-source license designed to
 ensure the software remains accessible for social and community projects, while
 restricting its use in purely commercial software products.
 
@@ -24,9 +24,15 @@ follow.
 
     TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
 
-0. Definitions.
+0. Applicability.
 
-"This License" refers to version 1.1 of the vyAI Social Commons 1.0 License.
+This License applies to any copyrightable work designated by the copyright
+holder as licensed under the vyAI Social Commons License, including but not
+limited to software, documentation, datasets, and models.
+
+1. Definitions.
+
+"This License" refers to version 1.1 of the vyAI Social Commons License.
 
 "The Program" refers to any copyrightable work licensed under this License.
 Each licensee is addressed as "you". "Licensees" and "recipients" may be
@@ -59,7 +65,7 @@ value provided to the end-user is substantially derived from the covered work.
 wearables, custom devices) that is sold to an end-user and in which the Software
 is embedded or integrated.
 
-1. Basic Permissions.
+2. Basic Permissions.
 
 All rights granted under this License are granted for the term of copyright on
 the Program, and are irrevocable provided the stated conditions are met. This
@@ -70,7 +76,7 @@ if the output, given its content, constitutes a covered work.
 You may make, run and propagate covered works that you do not convey, without
 conditions so long as your license otherwise remains in force.
 
-2. Verbatim Copies.
+3. Verbatim Copies.
 
 You may convey verbatim copies of the Program's source code as you receive it,
 in any medium, provided that you conspicuously and appropriately publish on each
@@ -79,10 +85,10 @@ that this License applies to the code; keep intact all notices of the absence of
 any warranty; and give all recipients a copy of this License along with the
 Program.
 
-3. Conveying Modified Source Versions.
+4. Conveying Modified Source Versions.
 
 You may convey a work based on the Program, or the modifications to produce it
-from the Program, in the form of source code under the terms of section 2,
+from the Program, in the form of source code under the terms of section 3,
 provided that you also meet all of these conditions:
 
     a) The work must carry prominent notices stating that you modified it,
@@ -92,7 +98,7 @@ provided that you also meet all of these conditions:
     c) You must license the entire work, as a whole, under this License to
        anyone who comes into possession of a copy.
 
-4. Commercial and Service Restrictions.
+5. Commercial and Service Restrictions.
 
     a) Prohibition on Direct Sale: It is strictly prohibited to sell, rent,
        lease, license, sublicense, or otherwise monetize access to the
@@ -106,9 +112,9 @@ provided that you also meet all of these conditions:
        provide access to the Program's features via an API or other remote
        interface for a fee.
 
-5. Exception for Physical Products and Ancillary Services.
+6. Exception for Physical Products and Ancillary Services.
 
-Notwithstanding the prohibitions in Section 4, you are permitted to create,
+Notwithstanding the prohibitions in Section 5, you are permitted to create,
 manufacture, and sell Physical Products that incorporate, use, or are controlled
 by the Program or a covered work.
 
@@ -122,13 +128,17 @@ You may offer paid support, installation, or consulting services related to the
 Program or a Physical Product without violating this License, provided these
 services do not involve the direct sale or licensing of the software itself.
 
-6. No Sublicensing.
+7. No Sublicensing.
 
 This License is not a sublicense. If you receive a copy of the Program, you
 receive a license directly from the original licensors, subject to the terms and
 conditions of this License.
 
-7. Additional Terms.
+8. Compatibility with Other Licenses.
+
+> Works licensed under this License may be combined with works licensed under the GNU General Public License version 3 (GPLv3), provided that the combined work is licensed under the GPLv3. However, the restrictions in Section 5 of this License continue to apply to the original work.
+
+9. Additional Terms.
 
 "Additional permissions" are terms that supplement the terms of this License by
 making exceptions from one or more of its conditions. Additional permissions
@@ -138,7 +148,7 @@ included in this License, to the extent that they are valid under applicable law
 If you convey a copy of a covered work, you may at your option remove any
 additional permissions from that copy, or from any part of it.
 
-8. Termination.
+10. Termination.
 
 You may not propagate or modify a covered work except as expressly provided
 under this License. Any attempt otherwise to propagate or modify it is void, and
@@ -150,7 +160,7 @@ until the copyright holder explicitly and finally terminates your license,
 and (b) permanently, if the copyright holder fails to notify you of the
 violation by some reasonable means prior to 60 days after the cessation.
 
-9. Acceptance Not Required for Having Copies.
+11. Acceptance Not Required for Having Copies.
 
 You are not required to accept this License in order to receive or run a copy of
 the Program. However, nothing other than this License grants you permission to
@@ -158,7 +168,7 @@ propagate or modify any covered work. These actions infringe copyright if you do
 not accept this License. Therefore, by modifying or propagating a covered work,
 you indicate your acceptance of this License to do so.
 
-10. Disclaimer of Warranty.
+12. Disclaimer of Warranty.
 
 THERE IS NO WARRANTY FOR THE PROGRAM, TO THE EXTENT PERMITTED BY APPLICABLE
 LAW. EXCEPT WHEN OTHERWISE STATED IN WRITING THE COPYRIGHT HOLDERS AND/OR OTHER
@@ -167,7 +177,7 @@ EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
 MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. THE ENTIRE RISK AS TO THE
 QUALITY AND PERFORMANCE OF THE PROGRAM IS WITH YOU.
 
-11. Limitation of Liability.
+13. Limitation of Liability.
 
 IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING WILL ANY
 COPYRIGHT HOLDER, OR ANY OTHER PARTY WHO MODIFIES AND/OR CONVEYS THE PROGRAM AS
@@ -176,10 +186,30 @@ INCIDENTAL OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE USE OR INABILITY TO USE
 THE PROGRAM, EVEN IF SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGES.
 
-12. Interpretation of Sections 10 and 11.
+14. Interpretation of Sections 12 and 13.
 
 If the disclaimer of warranty and limitation of liability provided above cannot
 be given local legal effect according to their terms, reviewing courts shall
 apply local law that most closely approximates an absolute waiver of all civil
 liability in connection with the Program, unless a warranty or assumption of
 liability accompanies a copy of the Program in return for a fee.
+
+---------------------------------------------------------------------------
+
+      How to Apply This License to Your Works
+
+To apply this License to your work, attach the following notice to the top
+of each source file or in a prominent location like a `LICENSE` or `README` file.
+
+    Copyright (C) [Year] [Name of Author or Organization]
+
+    This work is licensed under the vyAI Social Commons License, Version 1.1.
+    You may obtain a copy of the License at:
+    
+    https://vytruve.org/licenses/vyai-social-commons-1.0.html
+    
+    This license allows for free use, modification, and distribution in social
+    and community projects, and for integration into physical hardware.
+    It prohibits the direct sale of the software and its use in commercial
+    Software as a Service (SaaS) offerings. See the license for the full
+    terms and conditions.
