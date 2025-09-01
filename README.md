@@ -286,8 +286,4 @@ See `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md` in the repository root for legal
 
 * Visit the official site and downloads: `https://trackway.org`
 * Clone repo and view hardware blueprints & code: `https://github.com/phkaiser13/trackway`
-* If you want, I can now:
 
-  * generate a `downloads.md` page with platform-specific instructions and badges separated by OS,
-  * produce the systemd unit + Dockerfile + minimal `config.yaml` as single files,
-  * or create the full `trackiestudio` app manifest (Android `build.gradle` & iOS Xcode targets) as the **next single file**.
