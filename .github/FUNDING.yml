@@ -1,0 +1,74 @@
+# funding.yml
+
+# These are supported funding model platforms
+
+github:
+  - phkaiser13
+
+patreon: phkaiser13
+
+open_collective:
+  - 'https://opencollective.com/laramara'
+  - 'https://opencollective.com/ama'
+  - 'https://opencollective.com/abads'
+  - 'https://opencollective.com/fnpeti'
+
+ko_fi:
+  - 'https://ko-fi.com/laramara'
+  - 'https://ko-fi.com/ama'
+  - 'https://ko-fi.com/abads'
+  - 'https://ko-fi.com/fnpeti'
+
+tidelift:
+  - 'npm/laramara'
+  - 'npm/ama'
+  - 'npm/abads'
+  - 'npm/fnpeti'
+
+community_bridge:
+  - 'laramara'
+  - 'ama'
+  - 'abads'
+  - 'fnpeti'
+
+liberapay:
+  - 'https://liberapay.com/laramara'
+  - 'https://liberapay.com/ama'
+  - 'https://liberapay.com/abads'
+  - 'https://liberapay.com/fnpeti'
+
+issuehunt:
+  - 'https://issuehunt.io/r/laramara'
+  - 'https://issuehunt.io/r/ama'
+  - 'https://issuehunt.io/r/abads'
+  - 'https://issuehunt.io/r/fnpeti'
+
+lfx_crowdfunding:
+  - 'laramara'
+  - 'ama'
+  - 'abads'
+  - 'fnpeti'
+
+polar:
+  - 'https://polar.me/laramara'
+  - 'https://polar.me/ama'
+  - 'https://polar.me/abads'
+  - 'https://polar.me/fnpeti'
+
+buy_me_a_coffee:
+  - 'https://buymeacoffee.com/laramara'
+  - 'https://buymeacoffee.com/ama'
+  - 'https://buymeacoffee.com/abads'
+  - 'https://buymeacoffee.com/fnpeti'
+
+thanks_dev:
+  - 'https://thanks.dev/laramara'
+  - 'https://thanks.dev/ama'
+  - 'https://thanks.dev/abads'
+  - 'https://thanks.dev/fnpeti'
+
+custom:
+  - 'https://www.laramara.org.br/doe'
+  - 'https://ama.org.br/doe'
+  - 'https://www.abads.org.br/doe'
+  - 'https://fnpeti.org.br/doe'
