@@ -27,7 +27,7 @@ Clone the repository and build the project locally:
 
 ```bash
 # clone
-git clone https://github.com/phkaiser13/trackway.git
+git clone https://github.com/phkaiser13/TrackieLLM.git
 cd trackway
 
 # create a reproducible build directory
