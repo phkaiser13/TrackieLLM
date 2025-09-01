@@ -1,0 +1,88 @@
+# TrackieLLM C/C++/CUDA/Objective-C Code Style Configuration
+# Based on LLVM style with project-specific adjustments for clarity and production-readiness.
+# This configuration ensures consistency and readability across the entire native codebase.
+
+Language: Cpp
+BasedOnStyle: LLVM
+
+# Core Formatting Rules
+# --------------------
+AccessModifierOffset: -4
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignEscapedNewlines: Right
+AlignOperands: Align
+AlignTrailingComments: true
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowShortBlocksOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AlwaysBreakTemplateDeclarations: Yes
+BinPackArguments: true
+BinPackParameters: true
+ColumnLimit: 100
+
+# Brace Wrapping Style
+# --------------------
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterClass: true
+  AfterControlStatement: Always
+  AfterEnum: true
+  AfterFunction: true
+  AfterNamespace: true
+  AfterStruct: true
+  AfterUnion: true
+  AfterExternBlock: true
+  BeforeCatch: true
+  BeforeElse: true
+  IndentBraces: false
+  SplitEmptyFunction: true
+  SplitEmptyRecord: true
+  SplitEmptyNamespace: true
+
+# Pointer and Reference Alignment
+# -------------------------------
+# Align pointers and references to the left, with the type.
+# e.g., `int* ptr` instead of `int *ptr`. This is cleaner for complex types.
+DerivePointerAlignment: false
+PointerAlignment: Left
+
+# Include Management
+# ------------------
+# Automatically sort and group includes to enforce order and clarity.
+# 1. Project-specific headers (tk_*.h)
+# 2. Third-party library headers
+# 3. System C headers (<*.h>)
+# 4. System C++ headers (<vector>, <string>, etc.)
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex:           '^"tk_.*\.h(pp)?"$'
+    Priority:        1
+  - Regex:           '^<.*\.h>$'
+    Priority:        2
+  - Regex:           '^<.*>$'
+    Priority:        3
+  - Regex:           '.*'
+    Priority:        4
+IncludeIsMainRegex:  '([-_](test|unittest))?\.c(c|pp|u|mm)$'
+SortIncludes:        true
+
+# Namespace and Class Formatting
+# ------------------------------
+CompactNamespaces: false
+FixNamespaceComments: true
+IndentWidth: 4
+NamespaceIndentation: None
+TabWidth: 4
+UseTab: Never
+
+# C++ Specifics
+# -------------
+Cpp11BracedListStyle: true
+ReflowComments: true
+SortUsingDeclarations: true
+Standard: Cpp17

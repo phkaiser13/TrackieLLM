@@ -1,0 +1,34 @@
+# TrackieLLM Rust Code Style Configuration
+# This file ensures all Rust code is formatted consistently, promoting readability and maintainability.
+# Run `cargo fmt` to apply these rules across the workspace.
+
+# Use the 2021 edition of Rust for formatting rules.
+edition = "2021"
+
+# Maximum line width, consistent with the C/C++ style guide.
+max_width = 100
+
+# Control how imports (`use` statements) are organized.
+# This is critical for keeping modules clean.
+imports_granularity = "Crate"
+group_imports = "StdExternalCrate"
+reorder_imports = true
+
+# Use a more vertical layout for code blocks, which tends to be more readable.
+use_small_heuristics = "Max"
+
+# Always wrap comments to improve readability.
+wrap_comments = true
+comment_width = 90
+
+# Enforce trailing commas in multi-line lists to make diffs cleaner.
+trailing_comma = "Vertical"
+
+# Ensure struct literals with multiple fields are always formatted vertically.
+# This greatly improves readability for complex data structures.
+# e.g.,
+# MyStruct {
+#     field1: value1,
+#     field2: value2,
+# }
+struct_lit_width = 60
