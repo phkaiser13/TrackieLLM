@@ -1,0 +1,157 @@
+/*
+* Copyright (C) 2025 Pedro Henrique / phdev13
+*
+* File: tk_cuda_kernels.h
+*
+* This header file defines the C-callable interface for the core CUDA kernels
+* used in the TrackieLLM project. It acts as a strict contract between the
+* C/C++ dispatch layer and the CUDA C++ (`.cu`) implementation file.
+*
+* The design philosophy is based on several key engineering principles:
+*   1. Separation of Concerns: The dispatcher knows *what* to run and *when*,
+*      but not *how*. This header abstracts the `__global__` kernel launch syntax.
+*   2. Asynchronous Execution: Every kernel wrapper accepts a `cudaStream_t`,
+*      enabling the dispatcher to manage concurrent operations and overlap
+*      data transfers with computation for maximum throughput.
+*   3. Interface Stability: Kernel parameters are passed via dedicated structs.
+*      This prevents function signatures from becoming unwieldy and allows for
+*      parameters to be added in the future without breaking the API.
+*
+* This is the public API for the GPU's computational workhorse functions.
+*
+* SPDX-License-Identifier:
+*/
+
+#ifndef TRACKIELLM_GPU_CUDA_TK_CUDA_KERNELS_H
+#define TRACKIELLM_GPU_CUDA_TK_CUDA_KERNELS_H
+
+#include <stddef.h>
+#include <stdint.h>
+#include <cuda_runtime.h> // For cudaStream_t
+
+#include "utils/tk_error_handling.h"
+#include "gpu/cuda/tk_cuda_math_helpers.h" // For math types
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+//------------------------------------------------------------------------------
+// Kernel: Image Pre-processing for ONNX Models
+//------------------------------------------------------------------------------
+
+/**
+ * @struct tk_preprocess_params_t
+ * @brief Parameters for the image pre-processing kernel.
+ */
+typedef struct {
+    // --- Input ---
+    const unsigned char* d_input_image; /**< DEVICE pointer to the source image (e.g., uint8 RGB interleaved). */
+    uint32_t input_width;
+    uint32_t input_height;
+    uint32_t input_stride_bytes;
+
+    // --- Output ---
+    float* d_output_tensor;             /**< DEVICE pointer to the output planar tensor (e.g., float32 NCHW). */
+    uint32_t output_width;
+    uint32_t output_height;
+
+    // --- Normalization Parameters ---
+    // For normalization: output = (input / 255.0f - mean) / std_dev
+    TkFloat3 mean;                      /**< Mean values for R, G, B channels. */
+    TkFloat3 std_dev;                   /**< Standard deviation values for R, G, B channels. */
+} tk_preprocess_params_t;
+
+/**
+ * @brief Launches a kernel to pre-process an image for a neural network.
+ *
+ * This kernel handles resizing (using bilinear interpolation), data type
+ * conversion (uint8 to float32), layout conversion (interleaved to planar),
+* and normalization, all in a single, highly parallel pass.
+ *
+ * @param[in] params A pointer to the parameter structure.
+ * @param[in] stream The CUDA stream on which to launch the kernel.
+ *
+ * @return TK_SUCCESS if the kernel was successfully launched.
+ */
+TK_NODISCARD tk_error_code_t tk_kernels_preprocess_image(const tk_preprocess_params_t* params, cudaStream_t stream);
+
+//------------------------------------------------------------------------------
+// Kernel: Depth Map Post-processing
+//------------------------------------------------------------------------------
+
+/**
+ * @struct tk_postprocess_depth_params_t
+ * @brief Parameters for the depth map post-processing kernel.
+ */
+typedef struct {
+    // --- Input ---
+    const float* d_raw_depth_map; /**< DEVICE pointer to the raw output from the MiDaS model. */
+    uint32_t width;
+    uint32_t height;
+
+    // --- Output ---
+    float* d_metric_depth_map;    /**< DEVICE pointer to the output depth map in meters. */
+
+    // --- Conversion Parameters ---
+    float scale;                  /**< Scale factor to apply to the raw values. */
+    float shift;                  /**< Shift factor to apply to the raw values. */
+} tk_postprocess_depth_params_t;
+
+/**
+ * @brief Launches a kernel to convert a raw model output into a metric depth map.
+ *
+ * This typically involves a simple element-wise operation (e.g., value * scale + shift)
+ * to transform the network's output range into real-world units (meters).
+ *
+ * @param[in] params A pointer to the parameter structure.
+ * @param[in] stream The CUDA stream on which to launch the kernel.
+ *
+ * @return TK_SUCCESS if the kernel was successfully launched.
+ */
+TK_NODISCARD tk_error_code_t tk_kernels_postprocess_depth_map(const tk_postprocess_depth_params_t* params, cudaStream_t stream);
+
+//------------------------------------------------------------------------------
+// Kernel: Depth Map to 3D Point Cloud
+//------------------------------------------------------------------------------
+
+/**
+ * @struct tk_depth_to_points_params_t
+ * @brief Parameters for the depth-to-point-cloud kernel.
+ */
+typedef struct {
+    // --- Input ---
+    const float* d_metric_depth_map; /**< DEVICE pointer to the metric depth map (in meters). */
+    uint32_t width;
+    uint32_t height;
+
+    // --- Output ---
+    TkFloat3* d_point_cloud;         /**< DEVICE pointer to the output point cloud buffer. Size must be width * height. */
+
+    // --- Camera Intrinsics ---
+    float fx; /**< Focal length in x. */
+    float fy; /**< Focal length in y. */
+    float cx; /**< Principal point in x. */
+    float cy; /**< Principal point in y. */
+} tk_depth_to_points_params_t;
+
+/**
+ * @brief Launches a kernel to unproject a 2D depth map into a 3D point cloud.
+ *
+ * Each thread processes one pixel (u, v) with depth (d) and computes the
+ * corresponding 3D point (x, y, z) using the camera's intrinsic parameters.
+ * This is a fundamental step for 3D geometric analysis.
+ *
+ * @param[in] params A pointer to the parameter structure.
+ * @param[in] stream The CUDA stream on which to launch the kernel.
+ *
+ * @return TK_SUCCESS if the kernel was successfully launched.
+ */
+TK_NODISCARD tk_error_code_t tk_kernels_depth_to_point_cloud(const tk_depth_to_points_params_t* params, cudaStream_t stream);
+
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // TRACKIELLM_GPU_CUDA_TK_CUDA_KERNELS_H

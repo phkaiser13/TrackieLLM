@@ -1,0 +1,23 @@
+{
+  // This configuration file defines the style rules for our Markdown documentation.
+  // By default, all rules are enabled. We can then override specific rules below.
+  "default": true,
+
+  // MD013: Line length.
+  // We disable this rule because AI-generated content can have variable line lengths,
+  // and enforcing a strict limit can be counterproductive.
+  "MD013": false,
+
+  // MD012: Multiple consecutive blank lines.
+  // Disabled to allow for more flexible spacing in the generated documents.
+  "MD012": false,
+
+  // MD033: Inline HTML.
+  // We allow inline HTML for potentially more complex formatting needs in the future,
+  // such as tables with custom styling or embedding other elements.
+  "MD033": false,
+
+  // MD041: First line in file should be a top-level heading.
+  // We keep this enabled to enforce good document structure.
+  "MD041": true
+}
