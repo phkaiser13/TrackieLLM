@@ -1,33 +1,37 @@
-# These are supported funding model platforms
+# =================================================================
+# GitHub Funding Configuration
+# =================================================================
+# Este arquivo permite exibir links de financiamento para projetos
+# no GitHub Sponsors e outros canais de apoio.
+# =================================================================
 
-github: phkaiser13
+github: 
+  sponsors:
+    - phkaiser13   # Seu GitHub Sponsors
 
-patreon: phkaiser13
+patreon:
+  - https://www.patreon.com/phkaiser13   # Seu Patreon
 
-open_collective: laramara
-
-
-ko_fi: amaorgbr
-
-
-tidelift: npm/amaorgbr
-
-
-community_bridge: fnpeti
-
-liberapay: oncb
-
-issuehunt: fnpeti
-lfx_crowdfunding: laramara
-
-polar: amaorgbr
-
-buy_me_a_coffee: fnpeti
-
-thanks_dev: oncb
-
-custom:
-  - https://fundacaodorina.org.br/doe
-  - https://www.abads.org.br/doe
-  - https://livredetrabalhoinfantil.org.br/doe
-  - https://www.adeva.org.br/doe
+organizations:
+  brazilian:
+    - name: "Instituto Benjamin Constant"
+      url: "https://www.ibc.gov.br/"  # Focado em deficiência visual
+    - name: "Associação de Pais e Amigos dos Excepcionais (APAE)"
+      url: "https://www.apaebrasil.org.br/"  # Deficiências múltiplas
+    - name: "Associação Brasileira de Autismo (ABRA)"
+      url: "https://www.abraautismo.org.br/"
+    - name: "Fundação Abrinq"
+      url: "https://www.fundabrinq.org.br/"  # Defesa de direitos de crianças e adolescentes
+    - name: "Instituto Rodrigo Mendes"
+      url: "https://www.institutorodrigomendes.org.br/"  # Inclusão de pessoas com deficiência
+  global:
+    - name: "World Blind Union"
+      url: "https://www.worldblindunion.org/"
+    - name: "Autism Speaks"
+      url: "https://www.autismspeaks.org/"
+    - name: "Save the Children"
+      url: "https://www.savethechildren.org/"  # Trabalho infantil e direitos infantis
+    - name: "Humanity & Inclusion (HI)"
+      url: "https://www.hi.org/"  # Deficiências e inclusão global
+    - name: "The Royal National Institute of Blind People (RNIB)"
+      url: "https://www.rnib.org.uk/"
