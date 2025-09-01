@@ -1,34 +1,81 @@
-# TrackieLLM Rust Code Style Configuration
-# This file ensures all Rust code is formatted consistently, promoting readability and maintainability.
-# Run `cargo fmt` to apply these rules across the workspace.
+#
+# Copyright (C) 2025 Pedro Henrique / phdev13
+#
+# File: rustfmt.toml
+#
+# This file provides a centralized configuration for `rustfmt`, the official
+# Rust code formatter. By defining our formatting rules here, we ensure a
+# consistent and uniform code style across the entire TrackieLLM project,
+# regardless of the developer's local editor settings. This consistency is
+# vital for readability and maintainability.
+#
+# SPDX-License-Identifier:
+#
 
-# Use the 2021 edition of Rust for formatting rules.
+# The edition of Rust to use for formatting. This should match the edition
+# set in the Cargo.toml files of the individual crates. "2021" is the current
+# modern standard.
 edition = "2021"
 
-# Maximum line width, consistent with the C/C++ style guide.
-max_width = 100
+# The maximum width of a line. A slightly longer line length than the default
+# (100) is often a good compromise in modern widescreen displays, preventing
+# excessive line wrapping, especially in function signatures with many arguments
+# or complex type annotations.
+max_width = 120
 
-# Control how imports (`use` statements) are organized.
-# This is critical for keeping modules clean.
+# How to handle items in blocks, etc. `Vertical` means that if the items
+# can't fit on one line, they will each be placed on a separate line. This
+# improves readability for long lists of imports, function arguments, etc.
 imports_granularity = "Crate"
 group_imports = "StdExternalCrate"
+
+# Use tabs instead of spaces for indentation. This is a stylistic choice, but
+# can be beneficial for accessibility as it allows developers to configure the
+# visual width of indentation in their own editors.
+# For this project, we will stick to the more common convention of spaces.
+use_tabs = false
+tab_spaces = 4
+
+# Controls the layout of function calls, chains, and literals. `Block` indent
+# style is generally considered more readable for complex constructs.
+indent_style = "Block"
+
+# How to format comments. Setting this to `Block` ensures that line comments
+# starting with `//` are indented at the same level as the code they describe.
+comment_width = 100
+
+# Reorder `use` statements lexicographically. This keeps the import lists
+# clean and predictable.
 reorder_imports = true
 
-# Use a more vertical layout for code blocks, which tends to be more readable.
-use_small_heuristics = "Max"
+# Reorder `mod` statements lexicographically.
+reorder_modules = true
 
-# Always wrap comments to improve readability.
+# Put the `where` clause on a new line if it's long or multi-line. This greatly
+# improves the readability of complex generic function signatures.
+where_single_line = false
+
+# Don't collapse empty bodies of functions, impls, etc., into `{}`, always
+# expand them to a newline. This makes it easier to add code later.
+empty_item_single_line = false
+
+# How to format function-like macros.
+# `"Tall"` means the macro will be formatted like a function call with arguments
+# on separate lines if they don't fit on one.
+fn_call_width = 80
+macro_call_threshold = 60
+
+# A list of names that should not be reordered in `use` statements.
+# Useful for `prelude` imports or other special cases.
+# reorder_imports_ignore = ["prelude"]
+
+# Wrap comments. This helps keep comments within the `max_width`.
 wrap_comments = true
-comment_width = 90
 
-# Enforce trailing commas in multi-line lists to make diffs cleaner.
+# Normalize comments by removing leading/trailing whitespace and unifying
+# the comment style.
+normalize_comments = true
+
+# Forbid trailing commas in single-line struct literals, etc.
+# `Never` is a common choice for consistency.
 trailing_comma = "Vertical"
-
-# Ensure struct literals with multiple fields are always formatted vertically.
-# This greatly improves readability for complex data structures.
-# e.g.,
-# MyStruct {
-#     field1: value1,
-#     field2: value2,
-# }
-struct_lit_width = 60

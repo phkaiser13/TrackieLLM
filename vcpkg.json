@@ -1,76 +1,53 @@
 {
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
   "name": "trackiellm",
-  "version-string": "0.1.0",
-  "description": "Manifest file for TrackieLLM's C++ dependencies.",
+  "version-string": "1.0.0",
+  "description": "vcpkg manifest for TrackieLLM C/C++ dependencies.",
   "homepage": "https://github.com/phdev13/trackiellm",
-  "license": "Proprietary",
+  "license": "NONE",
   "dependencies": [
     {
       "name": "onnxruntime",
-      "description": "Cross-platform inference and training machine-learning accelerator. Used for YOLO and MiDaS models."
+      "description": "Core dependency for running computer vision models (YOLO, MiDaS).",
+      "features": []
+    },
+    {
+      "name": "libsodium",
+      "description": "Modern and easy-to-use crypto library for security features."
+    },
+    {
+      "name": "protobuf",
+      "description": "Protocol Buffers, often a dependency for ML model serialization and communication."
     },
     {
       "name": "tesseract",
-      "description": "High-quality OCR engine. Used for text recognition."
-    },
-    {
-      "name": "llama-cpp",
-      "description": "Inference of LLaMA model in pure C/C++. Used for the Mistral-7B core LLM."
-    },
-    {
-      "name": "whisper-cpp",
-      "description": "High-performance inference of OpenAI's Whisper model in C/C++. Used for ASR."
-    },
-    {
-      "name": "miniaudio",
-      "description": "Single-file audio playback and capture library. Used for microphone input and speaker output."
-    },
-    {
-      "name": "gtest",
-      "description": "Google Test framework for C++ unit testing.",
-      "host": true
-    },
-    {
-      "name": "benchmark",
-      "description": "Google Benchmark library for C++ microbenchmarking.",
-      "host": true
+      "description": "OCR engine for text recognition.",
+      "default-features": false,
+      "features": [
+        "eng",
+        "por"
+      ]
     }
   ],
   "features": {
-    "cuda": {
-      "description": "Enables CUDA support in dependencies for NVIDIA GPU acceleration.",
+    "tests": {
+      "description": "Dependencies for building unit and integration tests.",
       "dependencies": [
         {
-          "name": "onnxruntime",
-          "features": [ "cuda" ]
+          "name": "gtest",
+          "description": "GoogleTest framework for C++ unit testing."
         },
         {
-          "name": "llama-cpp",
-          "features": [ "cuda" ]
-        },
-        {
-          "name": "whisper-cpp",
-          "features": [ "cuda" ]
-        }
-      ]
-    },
-    "rocm": {
-      "description": "Enables ROCm support in dependencies for AMD GPU acceleration.",
-      "dependencies": [
-        {
-          "name": "onnxruntime",
-          "features": [ "rocm" ]
-        },
-        {
-          "name": "llama-cpp",
-          "features": [ "rocm" ]
-        },
-        {
-          "name": "whisper-cpp",
-          "features": [ "rocm" ]
+          "name": "google-benchmark",
+          "description": "Google Benchmark library for performance microbenchmarks."
         }
       ]
     }
-  }
+  },
+  "builtin-baseline": "a1e64af5c438a67f63e7f105131d3c75725b65f3",
+  "overrides": [
+    {
+      "name": "onnxruntime", "version": "1.17.1"
+    }
+  ]
 }

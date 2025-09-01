@@ -1,0 +1,43 @@
+#
+# Copyright (C) 2025 Pedro Henrique / phdev13
+#
+# File: rust-toolchain.toml
+#
+# This file specifies the exact Rust toolchain version to be used for the
+# TrackieLLM project. By pinning the toolchain, we ensure that all developers,
+# build servers, and CI/CD pipelines use the identical version of the Rust
+# compiler, linker, and associated tools. This practice is critical for
+# achieving reproducible builds and eliminating "works on my machine" issues
+# related to toolchain inconsistencies.
+#
+# SPDX-License-Identifier:
+#
+
+[toolchain]
+# We pin to a specific version of the 'stable' channel. This provides a balance
+# between stability and access to modern language features. The version should
+# be periodically reviewed and updated consciously as a team.
+# Using a recent stable version is recommended.
+channel = "stable"
+# Example version, should be updated to the latest stable upon project start.
+# version = "1.78.0"
+
+# In addition to the standard components, we can specify extra components
+# that should be installed with the toolchain.
+# 'rustfmt' is the standard code formatter.
+# 'clippy' is the standard linter for catching common mistakes and improving code.
+# 'rust-src' is required by some tools like rust-analyzer for go-to-definition.
+components = ["rustfmt", "clippy", "rust-src"]
+
+# We can also specify the targets to be installed, which is crucial for
+# cross-compilation. For TrackieLLM, we will need targets for ARM-based
+# embedded Linux, iOS, and Android.
+#
+# Example targets:
+# targets = [
+#   "aarch64-unknown-linux-gnu",    # For 64-bit ARM Linux (e.g., Orange Pi, Raspberry Pi 4+)
+#   "aarch64-apple-ios",            # For modern iOS devices
+#   "aarch64-linux-android",        # For 64-bit Android
+#   "x86_64-pc-windows-msvc",       # For Windows development
+#   "x8á_64-apple-darwin"           # For macOS development
+# ]

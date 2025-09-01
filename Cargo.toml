@@ -1,65 +1,84 @@
-# TrackieLLM Rust Workspace Manifest
-# This file defines the root of the Cargo workspace, allowing unified management
-# of all Rust crates within the project.
+#
+# Copyright (C) 2025 Pedro Henrique / phdev13
+#
+# File: Cargo.toml
+#
+# This file defines the root of the Rust workspace for TrackieLLM.
+# As a "virtual manifest", it doesn't correspond to a specific package itself
+# but instead orchestrates the collection of member crates located throughout
+# the `src` directory. This allows for unified dependency management, build
+# profiles, and tooling across all Rust components of the project.
+#
+# SPDX-License-Identifier:
+#
 
 [workspace]
-# The resolver specifies how Cargo resolves feature flags. Version "2" is the modern, recommended setting.
+# The resolver version "2" is the modern default and should always be used.
+# It enables more intelligent feature resolution and avoids common dependency issues.
 resolver = "2"
 
-# List all member crates that are part of this workspace.
-# Cargo will manage these as a single cohesive unit.
+# List all the Rust crates within the project. Each subdirectory containing a
+# `lib.rs` or `main.rs` and its own `Cargo.toml` is a member of the workspace.
+# This list must be kept in sync with the project's directory structure.
 members = [
-    "src/monitoring",
-    "src/security",
-    "src/deployment",
-    "src/experiments",
-    "src/internal_tools",
-    "src/logging_ext",
-    "src/memory",
-    "src/ai_models",
-    "src/networking",
-    "src/async_tasks",
-    "src/integration",
-    "src/profiling",
+    "src/async_tasks/src",
+    "src/audio/src",
     "src/cortex/rust",
-    "src/vision",
-    "src/audio",
-    "src/sensors",
-    "src/interaction",
-    "src/utils",
+    "src/deployment/src",
+    "src/experiments/src",
+    "src/interaction/src",
+    "src/internal_tools/src",
+    "src/logging_ext/src",
+    "src/memory/src",
+    "src/monitoring/src",
+    "src/networking/src",
+    "src/profiling/src",
+    "src/security/src",
+    "src/sensors/src",
+    "src/utils/src",
+    "src/vision/src",
 ]
 
-# Shared dependencies for all workspace members.
-# This ensures version consistency across the entire project.
-# Individual crates can inherit these by using `dependency.workspace = true`.
-[workspace.dependencies]
-# Core utilities
-log = "0.4"
-thiserror = "1.0"
-anyhow = "1.0"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-
-# Asynchronous runtime and primitives
-tokio = { version = "1", features = ["full"] }
-futures = "0.3"
-
-# FFI and interoperability
-cbindgen = "0.26"
+# Workspace-wide dependencies can be defined here to ensure all crates use the
+# same version of a common dependency. This is critical for consistency.
+# Example:
+# [workspace.dependencies]
+# log = "0.4"
+# libc = "0.2"
+# tokio = { version = "1", features = ["full"] }
 
 
-# Build profiles define compiler settings for different contexts.
-[profile.dev]
-panic = "unwind" # Default for easier debugging.
-
-[profile.release]
-# Optimize for maximum performance.
-opt-level = 3
-# Enable Fat Link-Time Optimization for whole-program optimization.
+# Define shared build profiles for all member crates.
+# This ensures consistent optimization levels and debug information.
+[workspace.profile.release]
+# Enable debug information even in release builds. This is invaluable for
+# profiling and debugging production issues without a significant performance
+# impact on modern systems.
+debug = true
+# Link-Time Optimization (LTO) can significantly improve performance by optimizing
+# across crate boundaries, but it increases link times. "fat" is a good default
+# for production builds.
 lto = "fat"
-# Use a single codegen unit for maximum optimization potential, at the cost of compile time.
-codegen-units = 1
-# Abort on panic for smaller binaries and no unwinding overhead, critical for embedded/real-time.
+# Optimize for the best performance. Level 3 is the default, but explicitly set.
+opt-level = 3
+# Abort on panic for release builds. This results in smaller binaries and is
+# often the desired behavior for embedded systems or libraries where panics
+# are considered unrecoverable bugs.
 panic = "abort"
-# Remove debug symbols from the final executable to reduce size.
+# Strip symbols from the final binary to reduce its size.
 strip = true
+
+[workspace.profile.dev]
+# Development builds should not strip symbols and should have full debug info.
+strip = false
+debug = 2
+# Disable LTO for faster compile times during development.
+lto = false
+# Optimize for compilation speed.
+opt-level = 0
+
+[workspace.profile.bench]
+# Benchmarks should be built with release-level optimizations.
+inherits = "release"
+# But we don't strip symbols to get better profiling data.
+strip = false

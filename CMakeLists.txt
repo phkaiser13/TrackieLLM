@@ -3,142 +3,156 @@
 #
 # File: CMakeLists.txt
 #
-# This is the root CMake build script for the TrackieLLM project.
-# It is responsible for top-level project configuration, dependency management,
-# toolchain detection (including GPU backends), and orchestrating the build
-# of all sub-modules (C, C++, Rust).
+# This is the root CMake script for the TrackieLLM project. It is responsible for
+# setting up the project-wide configurations, detecting necessary tools and
+# libraries, defining build options, and including the subdirectories that
+# contain the actual source code and build targets.
 #
 # SPDX-License-Identifier:
 #
 
-# --- 1. Project Definition and Boilerplate ---
-# Require a modern version of CMake for features like FetchContent and robust
-# language support.
-cmake_minimum_required(VERSION 3.20 FATAL_ERROR)
+#--------------------------------------------------------------------------------
+# Project Definition and Configuration
+#--------------------------------------------------------------------------------
+cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
 
 project(TrackieLLM
     VERSION 1.0.0
-    DESCRIPTION "Real-time, on-device multimodal AI assistant for the visually impaired."
+    DESCRIPTION "High-performance, multi-modal AI system for visually impaired users."
     LANGUAGES C CXX CUDA OBJCXX
 )
 
-# --- 2. Global Configuration and Options ---
-# Provide a standard option to control the build of the test suite.
-option(TK_BUILD_TESTS "Build unit and integration tests" ON)
+# Set a consistent version variable for use throughout the build scripts
+set(TRACKIELLM_VERSION ${PROJECT_VERSION})
+message(STATUS "Configuring TrackieLLM version ${TRACKIELLM_VERSION}")
 
-# Set project-wide compiler standards.
-set(CMAKE_C_STANDARD 17)
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CUDA_STANDARD 17)
-
-# Enforce standard-required flags for portability.
+#--------------------------------------------------------------------------------
+# Standard and Compiler Feature Setup
+#--------------------------------------------------------------------------------
+# Enforce modern C and C++ standards. C++17 is required for features like
+# std::filesystem and std::optional. C11 is a modern baseline for C.
+set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS OFF)
+
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Set a global output directory for binaries to keep the build tree clean.
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-
-# --- 3. GPU Acceleration Backend Detection ---
-# This section detects available GPU toolkits and sets up compile-time flags.
-# Users can override detection by passing -D<OPTION>=ON/OFF to CMake.
-
-# CUDA (NVIDIA)
-option(TK_ENABLE_CUDA "Enable CUDA backend for NVIDIA GPUs" ON)
-if(TK_ENABLE_CUDA)
-    find_package(CUDAToolkit QUIET)
-    if(CUDAToolkit_FOUND)
-        set(TK_CUDA_FOUND TRUE)
-        message(STATUS "CUDA Toolkit found (version ${CUDAToolkit_VERSION}). CUDA backend enabled.")
-    else()
-        set(TK_CUDA_FOUND FALSE)
-        message(STATUS "CUDA Toolkit not found. CUDA backend will be disabled.")
-    endif()
+# For Apple platforms, Objective-C++ requires a standard as well.
+if(APPLE)
+    set(CMAKE_OBJCXX_STANDARD 17)
+    set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
 endif()
 
-# Metal (Apple Silicon)
-option(TK_ENABLE_METAL "Enable Metal backend for Apple Silicon" ON)
-if(TK_ENABLE_METAL AND CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-    set(TK_METAL_FOUND TRUE)
-    message(STATUS "Apple platform detected. Metal backend enabled.")
-else()
-    set(TK_METAL_FOUND FALSE)
-    if(TK_ENABLE_METAL)
-        message(STATUS "Metal backend is only available on Apple platforms. Disabling.")
-    endif()
-endif()
+# Set the position-independent code flag, which is required for shared libraries
+# and often good practice for executables for security (ASLR).
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# ROCm (AMD)
-option(TK_ENABLE_ROCM "Enable ROCm backend for AMD GPUs" ON)
-if(TK_ENABLE_ROCM)
-    # ROCm detection can be complex. We check for a key environment variable or a standard path.
-    # A more robust check might be needed for production.
-    if(DEFINED ENV{ROCM_PATH} OR EXISTS "/opt/rocm")
-        set(TK_ROCM_FOUND TRUE)
-        message(STATUS "ROCm installation detected. ROCm backend enabled.")
-    else()
-        set(TK_ROCM_FOUND FALSE)
-        message(STATUS "ROCm installation not found. ROCm backend will be disabled.")
-    endif()
-endif()
+#--------------------------------------------------------------------------------
+# Build Options and Customizations
+#--------------------------------------------------------------------------------
+# These options allow developers to tailor the build to their specific hardware
+# and development needs, such as enabling or disabling specific GPU backends.
+option(TK_ENABLE_CUDA "Enable NVIDIA CUDA support for GPU acceleration" ON)
+option(TK_ENABLE_METAL "Enable Apple Metal support for GPU acceleration (macOS/iOS)" ON)
+option(TK_ENABLE_ROCM "Enable AMD ROCm support for GPU acceleration" OFF)
+option(TK_BUILD_TESTS "Build unit and integration tests" ON)
+option(TK_BUILD_BENCHMARKS "Build performance benchmarks" ON)
 
-# --- 4. Dependency Management (FetchContent) ---
-# We use FetchContent to manage external dependencies. This avoids git submodules
-# and makes the build self-contained and reproducible.
-include(FetchContent)
-
-# Corrosion: The bridge between CMake and Rust's Cargo build system.
-FetchContent_Declare(
-    Corrosion
-    GIT_REPOSITORY https://github.com/corrosion-rs/corrosion.git
-    GIT_TAG v0.4 # Use a specific, stable tag
+#--------------------------------------------------------------------------------
+# Compiler Flags and Warnings
+#--------------------------------------------------------------------------------
+# A strict warning policy is crucial for catching potential bugs early.
+# These flags are common across GCC and Clang.
+set(COMMON_WARNING_FLAGS
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Wshadow
+    -Wformat=2
+    -Wconversion
+    -Wsign-conversion
+    -Wnull-dereference
+    -Wdouble-promotion
+    -Wimplicit-fallthrough
 )
-FetchContent_MakeAvailable(Corrosion)
 
-# GoogleTest: The primary framework for C/C++ unit and integration tests.
-if(TK_BUILD_TESTS)
-    FetchContent_Declare(
-        googletest
-        GIT_REPOSITORY https://github.com/google/googletest.git
-        GIT_TAG v1.14.0
-    )
-    FetchContent_MakeAvailable(googletest)
+# MSVC has a different set of warning flags.
+if(MSVC)
+    set(COMMON_WARNING_FLAGS /W4 /WX)
+else()
+    # Treat warnings as errors in non-Debug builds to enforce clean code.
+    if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+        list(APPEND COMMON_WARNING_FLAGS -Werror)
+    endif()
 endif()
 
+foreach(lang C CXX)
+    set(CMAKE_${lang}_FLAGS "${CMAKE_${lang}_FLAGS} ${COMMON_WARNING_FLAGS}")
+endforeach()
 
-# --- 5. Rust Workspace Integration ---
-# Import the entire Rust workspace defined in Cargo.toml as a single CMake target.
-# Corrosion will orchestrate the `cargo build` process and make the resulting
-# libraries available to CMake targets.
-corrosion_import_crate(MANIFEST_PATH ${CMAKE_SOURCE_DIR}/Cargo.toml)
+#--------------------------------------------------------------------------------
+# GPU Backend Configuration
+#--------------------------------------------------------------------------------
+if(TK_ENABLE_CUDA)
+    # Find the CUDA toolkit. The `find_package` command for CUDA is robust and
+    # sets up all necessary variables and targets.
+    find_package(CUDA 11.0 REQUIRED)
+    if(CUDA_FOUND)
+        message(STATUS "CUDA support enabled. Found CUDA toolkit version ${CUDA_VERSION}.")
+        # Propagate CUDA support to subdirectories
+        add_definitions(-DTK_HAS_CUDA)
+    else()
+        message(WARNING "CUDA support was enabled (TK_ENABLE_CUDA=ON) but the CUDA toolkit was not found. Disabling CUDA.")
+        set(TK_ENABLE_CUDA OFF)
+    endif()
+endif()
 
+if(APPLE AND TK_ENABLE_METAL)
+    # Metal support is primarily handled by checking for the availability of the
+    # Metal and Foundation frameworks.
+    find_library(METAL_LIBRARY Metal)
+    find_library(FOUNDATION_LIBRARY Foundation)
+    if(METAL_LIBRARY AND FOUNDATION_LIBRARY)
+        message(STATUS "Apple Metal support enabled.")
+        add_definitions(-DTK_HAS_METAL)
+    else()
+        message(WARNING "Metal support was enabled (TK_ENABLE_METAL=ON) but required frameworks were not found. Disabling Metal.")
+        set(TK_ENABLE_METAL OFF)
+    endif()
+endif()
 
-# --- 6. Main Build Logic ---
-# Delegate the definition of libraries and executables to the subdirectories.
-# This keeps the root CMakeLists.txt clean and focused on configuration.
+# Placeholder for ROCm configuration
+if(TK_ENABLE_ROCM)
+    message(STATUS "ROCm support is enabled (experimental).")
+    # Add find_package logic for HIP/ROCm here when implemented.
+    add_definitions(-DTK_HAS_ROCM)
+endif()
+
+#--------------------------------------------------------------------------------
+# Rust/Cargo Integration
+#--------------------------------------------------------------------------------
+# We use Corrosion to integrate Rust crates seamlessly into the CMake build process.
+# It handles the `cargo build` calls and creates imported targets for CMake.
+find_package(Corrosion REQUIRED)
+
+#--------------------------------------------------------------------------------
+# Subdirectory Processing
+#--------------------------------------------------------------------------------
+# Add the main source directory. All targets will be defined in the CMakeLists.txt
+# file within this directory and its children.
 add_subdirectory(src)
 
-# Conditionally add the test suite to the build.
+# Add tests and benchmarks if enabled
 if(TK_BUILD_TESTS)
-    enable_testing()
-    # The tests directory will contain tests that span multiple modules.
-    # add_subdirectory(tests) # This will be enabled once the tests directory is created.
+    # add_subdirectory(tests)
+    message(STATUS "Test builds are enabled.")
 endif()
 
+if(TK_BUILD_BENCHMARKS)
+    # add_subdirectory(benchmarks)
+    message(STATUS "Benchmark builds are enabled.")
+endif()
 
-# --- 7. Final Build Summary ---
-# Provide a clear summary of the configured build for the user.
-message(STATUS "--------------------------------------------------")
-message(STATUS "TrackieLLM Configuration Summary:")
-message(STATUS "  Version: ${PROJECT_VERSION}")
-message(STATUS "")
-message(STATUS "Enabled GPU Backends:")
-message(STATUS "  CUDA (NVIDIA):   ${TK_CUDA_FOUND}")
-message(STATUS "  Metal (Apple):     ${TK_METAL_FOUND}")
-message(STATUS "  ROCm (AMD):        ${TK_ROCM_FOUND}")
-message(STATUS "")
-message(STATUS "Build Options:")
-message(STATUS "  Build Tests:     ${TK_BUILD_TESTS}")
-message(STATUS "--------------------------------------------------")
+message(STATUS "TrackieLLM configuration complete.")
