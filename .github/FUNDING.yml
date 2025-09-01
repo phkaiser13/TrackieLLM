@@ -1,37 +1,24 @@
-# =================================================================
-# GitHub Funding Configuration
-# =================================================================
-# Este arquivo permite exibir links de financiamento para projetos
-# no GitHub Sponsors e outros canais de apoio.
-# =================================================================
+github: phkaiser13
 
-github: 
-  sponsors:
-    - phkaiser13   # Seu GitHub Sponsors
+patreon: phkaiser13
 
-patreon:
-  - https://www.patreon.com/phkaiser13   # Seu Patreon
+open_collective: laramara
 
-organizations:
-  brazilian:
-    - name: "Instituto Benjamin Constant"
-      url: "https://www.ibc.gov.br/"  # Focado em deficiência visual
-    - name: "Associação de Pais e Amigos dos Excepcionais (APAE)"
-      url: "https://www.apaebrasil.org.br/"  # Deficiências múltiplas
-    - name: "Associação Brasileira de Autismo (ABRA)"
-      url: "https://www.abraautismo.org.br/"
-    - name: "Fundação Abrinq"
-      url: "https://www.fundabrinq.org.br/"  # Defesa de direitos de crianças e adolescentes
-    - name: "Instituto Rodrigo Mendes"
-      url: "https://www.institutorodrigomendes.org.br/"  # Inclusão de pessoas com deficiência
-  global:
-    - name: "World Blind Union"
-      url: "https://www.worldblindunion.org/"
-    - name: "Autism Speaks"
-      url: "https://www.autismspeaks.org/"
-    - name: "Save the Children"
-      url: "https://www.savethechildren.org/"  # Trabalho infantil e direitos infantis
-    - name: "Humanity & Inclusion (HI)"
-      url: "https://www.hi.org/"  # Deficiências e inclusão global
-    - name: "The Royal National Institute of Blind People (RNIB)"
-      url: "https://www.rnib.org.uk/"
+custom:
+  # Organizações brasileiras
+  - https://www.ibc.gov.br/doe                   # Instituto Benjamin Constant (deficiência visual)
+  - https://www.apaebrasil.org.br/doe           # APAE (deficiências múltiplas)
+  - https://www.abraautismo.org.br/doe          # ABRA (autismo)
+  - https://www.fundabrinq.org.br/doe           # Fundação Abrinq (crianças e adolescentes)
+  - https://www.institutorodrigomendes.org.br/doe # Instituto Rodrigo Mendes (inclusão de pessoas com deficiência)
+  - https://fundacaodorina.org.br/doe           # Fundação Dorina Nowill (deficiência visual)
+  - https://www.abads.org.br/doe                # ABADS (deficiência e inclusão)
+  - https://livredetrabalhoinfantil.org.br/doe  # Combate ao trabalho infantil
+  - https://www.adeva.org.br/doe                # Associação de Deficientes Visuais do Amazonas
+
+  # Organizações globais
+  - https://www.worldblindunion.org/donate       # World Blind Union
+  - https://www.autismspeaks.org/donate          # Autism Speaks
+  - https://www.savethechildren.org/donate      # Save the Children (trabalho infantil)
+  - https://www.hi.org/en/donate                 # Humanity & Inclusion (deficiências)
+  - https://www.rnib.org.uk/donate               # RNIB (deficiência visual)
