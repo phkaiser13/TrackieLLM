@@ -1,44 +1,30 @@
 # These are supported funding model platforms
 
-github:
-  - phkaiser13
-  - laramara
-  - amaorgbr
-  - fnpeti
-  - oncb
+github: phkaiser13
 
-patreon:
-  - phkaiser13
+patreon: phkaiser13
 
-open_collective:
-  - laramara
+open_collective: laramara
 
-ko_fi:
-  - amaorgbr
 
-tidelift:
-  - npm/amaorgbr
+ko_fi: amaorgbr
 
-community_bridge:
-  - fnpeti
 
-liberapay:
-  - oncb
+tidelift: npm/amaorgbr
 
-issuehunt:
-  - fnpeti
 
-lfx_crowdfunding:
-  - laramara
+community_bridge: fnpeti
 
-polar:
-  - amaorgbr
+liberapay: oncb
 
-buy_me_a_coffee:
-  - fnpeti
+issuehunt: fnpeti
+lfx_crowdfunding: laramara
 
-thanks_dev:
-  - oncb
+polar: amaorgbr
+
+buy_me_a_coffee: fnpeti
+
+thanks_dev: oncb
 
 custom:
   - https://fundacaodorina.org.br/doe
