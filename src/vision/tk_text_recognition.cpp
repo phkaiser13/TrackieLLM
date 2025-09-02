@@ -17,7 +17,7 @@
  * SPDX-License-Identifier: AGPL-3.0 license
  */
 
-#include "vision/tk_text_recognition.h"
+#include "vision/tk_text_recognition.hpp"
 #include "utils/tk_logging.h"
 #include "utils/tk_error_handling.h"
 

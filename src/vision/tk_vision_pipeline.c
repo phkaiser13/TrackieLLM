@@ -22,7 +22,7 @@
 // Assume these headers exist and provide the necessary functionality
 #include "vision/tk_object_detector.h"
 #include "vision/tk_depth_midas.h"
-#include "vision/tk_text_recognition.h"
+#include "vision/tk_text_recognition.hpp"
 #include "utils/tk_logging.h"
 #include "memory/tk_memory_pool.h"
 
