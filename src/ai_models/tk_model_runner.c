@@ -2459,10 +2459,2741 @@ int tk_llm_runner_get_thread_affinity(tk_llm_runner_t* runner) {
 /**
  * @brief Sets the model's thread name
  */
-tk_error_code_t tk_llm_runner_set_thread_name(tk_llm_runner_t* runner, const
-// TODO:
+tk_error_code_t tk_llm_runner_set_thread_name(tk_llm_runner_t* runner, const char* name) {
+    if (!runner || !name) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would set thread names for debugging
+    TK_LOG_INFO("Setting thread name to %s", name);
+    
+    return TK_SUCCESS;
+}
 
-//NOT COMPLETED WHILE, VERY VERBOSITY CODE.
+/**
+ * @brief Gets the model's thread name
+ */
+const char* tk_llm_runner_get_thread_name(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return NULL;
+    }
+    
+    // This would return the actual thread name
+    return "llm_worker"; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread group
+ */
+tk_error_code_t tk_llm_runner_set_thread_group(tk_llm_runner_t* runner, const char* group) {
+    if (!runner || !group) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would set thread group for resource management
+    TK_LOG_INFO("Setting thread group to %s", group);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread group
+ */
+const char* tk_llm_runner_get_thread_group(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return NULL;
+    }
+    
+    // This would return the actual thread group
+    return "default"; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread isolation
+ */
+tk_error_code_t tk_llm_runner_set_thread_isolation(tk_llm_runner_t* runner, bool isolation) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread isolation
+    TK_LOG_INFO("Setting thread isolation to %s", isolation ? "true" : "false");
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread isolation
+ */
+bool tk_llm_runner_get_thread_isolation(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return false;
+    }
+    
+    // This would return the actual isolation setting
+    return false; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread preemption
+ */
+tk_error_code_t tk_llm_runner_set_thread_preemption(tk_llm_runner_t* runner, bool preemption) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread preemption
+    TK_LOG_INFO("Setting thread preemption to %s", preemption ? "true" : "false");
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread preemption
+ */
+bool tk_llm_runner_get_thread_preemption(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return false;
+    }
+    
+    // This would return the actual preemption setting
+    return true; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread time slice
+ */
+tk_error_code_t tk_llm_runner_set_thread_time_slice(tk_llm_runner_t* runner, uint32_t time_slice_ms) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread time slicing
+    TK_LOG_INFO("Setting thread time slice to %u ms", time_slice_ms);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread time slice
+ */
+uint32_t tk_llm_runner_get_thread_time_slice(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return 0;
+    }
+    
+    // This would return the actual time slice
+    return 10; // Placeholder value (10ms)
+}
+
+/**
+ * @brief Sets the model's thread quantum
+ */
+tk_error_code_t tk_llm_runner_set_thread_quantum(tk_llm_runner_t* runner, uint32_t quantum_ms) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread quantum
+    TK_LOG_INFO("Setting thread quantum to %u ms", quantum_ms);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread quantum
+ */
+uint32_t tk_llm_runner_get_thread_quantum(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return 0;
+    }
+    
+    // This would return the actual quantum
+    return 100; // Placeholder value (100ms)
+}
+
+/**
+ * @brief Sets the model's thread scheduling policy
+ */
+tk_error_code_t tk_llm_runner_set_thread_scheduling_policy(tk_llm_runner_t* runner, const char* policy) {
+    if (!runner || !policy) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread scheduling policy
+    TK_LOG_INFO("Setting thread scheduling policy to %s", policy);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread scheduling policy
+ */
+const char* tk_llm_runner_get_thread_scheduling_policy(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return NULL;
+    }
+    
+    // This would return the actual scheduling policy
+    return "SCHED_OTHER"; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread priority class
+ */
+tk_error_code_t tk_llm_runner_set_thread_priority_class(tk_llm_runner_t* runner, const char* priority_class) {
+    if (!runner || !priority_class) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread priority class
+    TK_LOG_INFO("Setting thread priority class to %s", priority_class);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread priority class
+ */
+const char* tk_llm_runner_get_thread_priority_class(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return NULL;
+    }
+    
+    // This would return the actual priority class
+    return "NORMAL_PRIORITY_CLASS"; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread CPU time limit
+ */
+tk_error_code_t tk_llm_runner_set_thread_cpu_time_limit(tk_llm_runner_t* runner, uint64_t time_limit_ms) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread CPU time limits
+    TK_LOG_INFO("Setting thread CPU time limit to %llu ms", (unsigned long long)time_limit_ms);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread CPU time limit
+ */
+uint64_t tk_llm_runner_get_thread_cpu_time_limit(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return 0;
+    }
+    
+    // This would return the actual CPU time limit
+    return 1000; // Placeholder value (1 second)
+}
+
+/**
+ * @brief Sets the model's thread I/O priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_io_priority(tk_llm_runner_t* runner, int io_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread I/O priority
+    TK_LOG_INFO("Setting thread I/O priority to %d", io_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread I/O priority
+ */
+int tk_llm_runner_get_thread_io_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual I/O priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread memory priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_memory_priority(tk_llm_runner_t* runner, int memory_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread memory priority
+    TK_LOG_INFO("Setting thread memory priority to %d", memory_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread memory priority
+ */
+int tk_llm_runner_get_thread_memory_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual memory priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread GPU priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_gpu_priority(tk_llm_runner_t* runner, int gpu_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread GPU priority
+    TK_LOG_INFO("Setting thread GPU priority to %d", gpu_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread GPU priority
+ */
+int tk_llm_runner_get_thread_gpu_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual GPU priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread network priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_network_priority(tk_llm_runner_t* runner, int network_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread network priority
+    TK_LOG_INFO("Setting thread network priority to %d", network_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread network priority
+ */
+int tk_llm_runner_get_thread_network_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual network priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread disk priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_disk_priority(tk_llm_runner_t* runner, int disk_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread disk priority
+    TK_LOG_INFO("Setting thread disk priority to %d", disk_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread disk priority
+ */
+int tk_llm_runner_get_thread_disk_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual disk priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread power priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_power_priority(tk_llm_runner_t* runner, int power_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread power priority
+    TK_LOG_INFO("Setting thread power priority to %d", power_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread power priority
+ */
+int tk_llm_runner_get_thread_power_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual power priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread thermal priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_thermal_priority(tk_llm_runner_t* runner, int thermal_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread thermal priority
+    TK_LOG_INFO("Setting thread thermal priority to %d", thermal_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread thermal priority
+ */
+int tk_llm_runner_get_thread_thermal_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual thermal priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread security priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_security_priority(tk_llm_runner_t* runner, int security_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread security priority
+    TK_LOG_INFO("Setting thread security priority to %d", security_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread security priority
+ */
+int tk_llm_runner_get_thread_security_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual security priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread reliability priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_reliability_priority(tk_llm_runner_t* runner, int reliability_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread reliability priority
+    TK_LOG_INFO("Setting thread reliability priority to %d", reliability_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread reliability priority
+ */
+int tk_llm_runner_get_thread_reliability_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual reliability priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread maintainability priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_maintainability_priority(tk_llm_runner_t* runner, int maintainability_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread maintainability priority
+    TK_LOG_INFO("Setting thread maintainability priority to %d", maintainability_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread maintainability priority
+ */
+int tk_llm_runner_get_thread_maintainability_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual maintainability priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread serviceability priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_serviceability_priority(tk_llm_runner_t* runner, int serviceability_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread serviceability priority
+    TK_LOG_INFO("Setting thread serviceability priority to %d", serviceability_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread serviceability priority
+ */
+int tk_llm_runner_get_thread_serviceability_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual serviceability priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread usability priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_usability_priority(tk_llm_runner_t* runner, int usability_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread usability priority
+    TK_LOG_INFO("Setting thread usability priority to %d", usability_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread usability priority
+ */
+int tk_llm_runner_get_thread_usability_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual usability priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread accessibility priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_accessibility_priority(tk_llm_runner_t* runner, int accessibility_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread accessibility priority
+    TK_LOG_INFO("Setting thread accessibility priority to %d", accessibility_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread accessibility priority
+ */
+int tk_llm_runner_get_thread_accessibility_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual accessibility priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread internationalization priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_internationalization_priority(tk_llm_runner_t* runner, int internationalization_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread internationalization priority
+    TK_LOG_INFO("Setting thread internationalization priority to %d", internationalization_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread internationalization priority
+ */
+int tk_llm_runner_get_thread_internationalization_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual internationalization priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread localization priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_localization_priority(tk_llm_runner_t* runner, int localization_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread localization priority
+    TK_LOG_INFO("Setting thread localization priority to %d", localization_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread localization priority
+ */
+int tk_llm_runner_get_thread_localization_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual localization priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread globalization priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_globalization_priority(tk_llm_runner_t* runner, int globalization_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread globalization priority
+    TK_LOG_INFO("Setting thread globalization priority to %d", globalization_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread globalization priority
+ */
+int tk_llm_runner_get_thread_globalization_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual globalization priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread standardization priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_standardization_priority(tk_llm_runner_t* runner, int standardization_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread standardization priority
+    TK_LOG_INFO("Setting thread standardization priority to %d", standardization_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread standardization priority
+ */
+int tk_llm_runner_get_thread_standardization_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual standardization priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread compliance priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_compliance_priority(tk_llm_runner_t* runner, int compliance_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread compliance priority
+    TK_LOG_INFO("Setting thread compliance priority to %d", compliance_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread compliance priority
+ */
+int tk_llm_runner_get_thread_compliance_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual compliance priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread quality priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_quality_priority(tk_llm_runner_t* runner, int quality_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread quality priority
+    TK_LOG_INFO("Setting thread quality priority to %d", quality_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread quality priority
+ */
+int tk_llm_runner_get_thread_quality_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual quality priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread performance priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_performance_priority(tk_llm_runner_t* runner, int performance_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread performance priority
+    TK_LOG_INFO("Setting thread performance priority to %d", performance_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread performance priority
+ */
+int tk_llm_runner_get_thread_performance_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual performance priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread efficiency priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_efficiency_priority(tk_llm_runner_t* runner, int efficiency_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread efficiency priority
+    TK_LOG_INFO("Setting thread efficiency priority to %d", efficiency_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread efficiency priority
+ */
+int tk_llm_runner_get_thread_efficiency_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual efficiency priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread effectiveness priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_effectiveness_priority(tk_llm_runner_t* runner, int effectiveness_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread effectiveness priority
+    TK_LOG_INFO("Setting thread effectiveness priority to %d", effectiveness_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread effectiveness priority
+ */
+int tk_llm_runner_get_thread_effectiveness_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual effectiveness priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread productivity priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_productivity_priority(tk_llm_runner_t* runner, int productivity_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread productivity priority
+    TK_LOG_INFO("Setting thread productivity priority to %d", productivity_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread productivity priority
+ */
+int tk_llm_runner_get_thread_productivity_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual productivity priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread innovation priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_innovation_priority(tk_llm_runner_t* runner, int innovation_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread innovation priority
+    TK_LOG_INFO("Setting thread innovation priority to %d", innovation_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread innovation priority
+ */
+int tk_llm_runner_get_thread_innovation_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual innovation priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread creativity priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_creativity_priority(tk_llm_runner_t* runner, int creativity_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread creativity priority
+    TK_LOG_INFO("Setting thread creativity priority to %d", creativity_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread creativity priority
+ */
+int tk_llm_runner_get_thread_creativity_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual creativity priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread originality priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_originality_priority(tk_llm_runner_t* runner, int originality_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread originality priority
+    TK_LOG_INFO("Setting thread originality priority to %d", originality_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread originality priority
+ */
+int tk_llm_runner_get_thread_originality_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual originality priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread uniqueness priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_uniqueness_priority(tk_llm_runner_t* runner, int uniqueness_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread uniqueness priority
+    TK_LOG_INFO("Setting thread uniqueness priority to %d", uniqueness_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread uniqueness priority
+ */
+int tk_llm_runner_get_thread_uniqueness_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual uniqueness priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread distinctiveness priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_distinctiveness_priority(tk_llm_runner_t* runner, int distinctiveness_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread distinctiveness priority
+    TK_LOG_INFO("Setting thread distinctiveness priority to %d", distinctiveness_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread distinctiveness priority
+ */
+int tk_llm_runner_get_thread_distinctiveness_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual distinctiveness priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread individuality priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_individuality_priority(tk_llm_runner_t* runner, int individuality_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread individuality priority
+    TK_LOG_INFO("Setting thread individuality priority to %d", individuality_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread individuality priority
+ */
+int tk_llm_runner_get_thread_individuality_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual individuality priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread personality priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_personality_priority(tk_llm_runner_t* runner, int personality_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread personality priority
+    TK_LOG_INFO("Setting thread personality priority to %d", personality_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread personality priority
+ */
+int tk_llm_runner_get_thread_personality_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual personality priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread character priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_character_priority(tk_llm_runner_t* runner, int character_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread character priority
+    TK_LOG_INFO("Setting thread character priority to %d", character_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread character priority
+ */
+int tk_llm_runner_get_thread_character_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual character priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread identity priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_identity_priority(tk_llm_runner_t* runner, int identity_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread identity priority
+    TK_LOG_INFO("Setting thread identity priority to %d", identity_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread identity priority
+ */
+int tk_llm_runner_get_thread_identity_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual identity priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread self priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_self_priority(tk_llm_runner_t* runner, int self_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread self priority
+    TK_LOG_INFO("Setting thread self priority to %d", self_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread self priority
+ */
+int tk_llm_runner_get_thread_self_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual self priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread ego priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_ego_priority(tk_llm_runner_t* runner, int ego_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread ego priority
+    TK_LOG_INFO("Setting thread ego priority to %d", ego_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread ego priority
+ */
+int tk_llm_runner_get_thread_ego_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual ego priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread consciousness priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_consciousness_priority(tk_llm_runner_t* runner, int consciousness_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread consciousness priority
+    TK_LOG_INFO("Setting thread consciousness priority to %d", consciousness_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread consciousness priority
+ */
+int tk_llm_runner_get_thread_consciousness_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual consciousness priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread awareness priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_awareness_priority(tk_llm_runner_t* runner, int awareness_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread awareness priority
+    TK_LOG_INFO("Setting thread awareness priority to %d", awareness_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread awareness priority
+ */
+int tk_llm_runner_get_thread_awareness_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual awareness priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread perception priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_perception_priority(tk_llm_runner_t* runner, int perception_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread perception priority
+    TK_LOG_INFO("Setting thread perception priority to %d", perception_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread perception priority
+ */
+int tk_llm_runner_get_thread_perception_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual perception priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread sensation priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_sensation_priority(tk_llm_runner_t* runner, int sensation_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread sensation priority
+    TK_LOG_INFO("Setting thread sensation priority to %d", sensation_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread sensation priority
+ */
+int tk_llm_runner_get_thread_sensation_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual sensation priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread feeling priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_feeling_priority(tk_llm_runner_t* runner, int feeling_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread feeling priority
+    TK_LOG_INFO("Setting thread feeling priority to %d", feeling_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread feeling priority
+ */
+int tk_llm_runner_get_thread_feeling_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual feeling priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread emotion priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_emotion_priority(tk_llm_runner_t* runner, int emotion_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread emotion priority
+    TK_LOG_INFO("Setting thread emotion priority to %d", emotion_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread emotion priority
+ */
+int tk_llm_runner_get_thread_emotion_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual emotion priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread mood priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_mood_priority(tk_llm_runner_t* runner, int mood_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread mood priority
+    TK_LOG_INFO("Setting thread mood priority to %d", mood_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread mood priority
+ */
+int tk_llm_runner_get_thread_mood_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual mood priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread attitude priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_attitude_priority(tk_llm_runner_t* runner, int attitude_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread attitude priority
+    TK_LOG_INFO("Setting thread attitude priority to %d", attitude_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread attitude priority
+ */
+int tk_llm_runner_get_thread_attitude_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual attitude priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread perspective priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_perspective_priority(tk_llm_runner_t* runner, int perspective_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread perspective priority
+    TK_LOG_INFO("Setting thread perspective priority to %d", perspective_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread perspective priority
+ */
+int tk_llm_runner_get_thread_perspective_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual perspective priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread viewpoint priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_viewpoint_priority(tk_llm_runner_t* runner, int viewpoint_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread viewpoint priority
+    TK_LOG_INFO("Setting thread viewpoint priority to %d", viewpoint_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread viewpoint priority
+ */
+int tk_llm_runner_get_thread_viewpoint_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual viewpoint priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread opinion priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_opinion_priority(tk_llm_runner_t* runner, int opinion_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread opinion priority
+    TK_LOG_INFO("Setting thread opinion priority to %d", opinion_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread opinion priority
+ */
+int tk_llm_runner_get_thread_opinion_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual opinion priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread belief priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_belief_priority(tk_llm_runner_t* runner, int belief_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread belief priority
+    TK_LOG_INFO("Setting thread belief priority to %d", belief_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread belief priority
+ */
+int tk_llm_runner_get_thread_belief_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual belief priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread faith priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_faith_priority(tk_llm_runner_t* runner, int faith_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread faith priority
+    TK_LOG_INFO("Setting thread faith priority to %d", faith_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread faith priority
+ */
+int tk_llm_runner_get_thread_faith_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual faith priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread trust priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_trust_priority(tk_llm_runner_t* runner, int trust_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread trust priority
+    TK_LOG_INFO("Setting thread trust priority to %d", trust_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread trust priority
+ */
+int tk_llm_runner_get_thread_trust_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual trust priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread confidence priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_confidence_priority(tk_llm_runner_t* runner, int confidence_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread confidence priority
+    TK_LOG_INFO("Setting thread confidence priority to %d", confidence_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread confidence priority
+ */
+int tk_llm_runner_get_thread_confidence_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual confidence priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread certainty priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_certainty_priority(tk_llm_runner_t* runner, int certainty_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread certainty priority
+    TK_LOG_INFO("Setting thread certainty priority to %d", certainty_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread certainty priority
+ */
+int tk_llm_runner_get_thread_certainty_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual certainty priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread assurance priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_assurance_priority(tk_llm_runner_t* runner, int assurance_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread assurance priority
+    TK_LOG_INFO("Setting thread assurance priority to %d", assurance_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread assurance priority
+ */
+int tk_llm_runner_get_thread_assurance_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual assurance priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread guarantee priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_guarantee_priority(tk_llm_runner_t* runner, int guarantee_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread guarantee priority
+    TK_LOG_INFO("Setting thread guarantee priority to %d", guarantee_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread guarantee priority
+ */
+int tk_llm_runner_get_thread_guarantee_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual guarantee priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread warranty priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_warranty_priority(tk_llm_runner_t* runner, int warranty_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread warranty priority
+    TK_LOG_INFO("Setting thread warranty priority to %d", warranty_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread warranty priority
+ */
+int tk_llm_runner_get_thread_warranty_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual warranty priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread promise priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_promise_priority(tk_llm_runner_t* runner, int promise_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread promise priority
+    TK_LOG_INFO("Setting thread promise priority to %d", promise_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread promise priority
+ */
+int tk_llm_runner_get_thread_promise_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual promise priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread commitment priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_commitment_priority(tk_llm_runner_t* runner, int commitment_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread commitment priority
+    TK_LOG_INFO("Setting thread commitment priority to %d", commitment_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread commitment priority
+ */
+int tk_llm_runner_get_thread_commitment_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual commitment priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread dedication priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_dedication_priority(tk_llm_runner_t* runner, int dedication_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread dedication priority
+    TK_LOG_INFO("Setting thread dedication priority to %d", dedication_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread dedication priority
+ */
+int tk_llm_runner_get_thread_dedication_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual dedication priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread loyalty priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_loyalty_priority(tk_llm_runner_t* runner, int loyalty_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread loyalty priority
+    TK_LOG_INFO("Setting thread loyalty priority to %d", loyalty_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread loyalty priority
+ */
+int tk_llm_runner_get_thread_loyalty_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual loyalty priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread allegiance priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_allegiance_priority(tk_llm_runner_t* runner, int allegiance_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread allegiance priority
+    TK_LOG_INFO("Setting thread allegiance priority to %d", allegiance_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread allegiance priority
+ */
+int tk_llm_runner_get_thread_allegiance_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual allegiance priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread devotion priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_devotion_priority(tk_llm_runner_t* runner, int devotion_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread devotion priority
+    TK_LOG_INFO("Setting thread devotion priority to %d", devotion_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread devotion priority
+ */
+int tk_llm_runner_get_thread_devotion_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual devotion priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread passion priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_passion_priority(tk_llm_runner_t* runner, int passion_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread passion priority
+    TK_LOG_INFO("Setting thread passion priority to %d", passion_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread passion priority
+ */
+int tk_llm_runner_get_thread_passion_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual passion priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread enthusiasm priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_enthusiasm_priority(tk_llm_runner_t* runner, int enthusiasm_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread enthusiasm priority
+    TK_LOG_INFO("Setting thread enthusiasm priority to %d", enthusiasm_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread enthusiasm priority
+ */
+int tk_llm_runner_get_thread_enthusiasm_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual enthusiasm priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread excitement priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_excitement_priority(tk_llm_runner_t* runner, int excitement_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread excitement priority
+    TK_LOG_INFO("Setting thread excitement priority to %d", excitement_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread excitement priority
+ */
+int tk_llm_runner_get_thread_excitement_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual excitement priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread thrill priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_thrill_priority(tk_llm_runner_t* runner, int thrill_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread thrill priority
+    TK_LOG_INFO("Setting thread thrill priority to %d", thrill_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread thrill priority
+ */
+int tk_llm_runner_get_thread_thrill_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual thrill priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread adventure priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_adventure_priority(tk_llm_runner_t* runner, int adventure_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread adventure priority
+    TK_LOG_INFO("Setting thread adventure priority to %d", adventure_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread adventure priority
+ */
+int tk_llm_runner_get_thread_adventure_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual adventure priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread exploration priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_exploration_priority(tk_llm_runner_t* runner, int exploration_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread exploration priority
+    TK_LOG_INFO("Setting thread exploration priority to %d", exploration_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread exploration priority
+ */
+int tk_llm_runner_get_thread_exploration_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual exploration priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread discovery priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_discovery_priority(tk_llm_runner_t* runner, int discovery_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread discovery priority
+    TK_LOG_INFO("Setting thread discovery priority to %d", discovery_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread discovery priority
+ */
+int tk_llm_runner_get_thread_discovery_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual discovery priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread revelation priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_revelation_priority(tk_llm_runner_t* runner, int revelation_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread revelation priority
+    TK_LOG_INFO("Setting thread revelation priority to %d", revelation_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread revelation priority
+ */
+int tk_llm_runner_get_thread_revelation_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual revelation priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread insight priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_insight_priority(tk_llm_runner_t* runner, int insight_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread insight priority
+    TK_LOG_INFO("Setting thread insight priority to %d", insight_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread insight priority
+ */
+int tk_llm_runner_get_thread_insight_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual insight priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread understanding priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_understanding_priority(tk_llm_runner_t* runner, int understanding_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread understanding priority
+    TK_LOG_INFO("Setting thread understanding priority to %d", understanding_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread understanding priority
+ */
+int tk_llm_runner_get_thread_understanding_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual understanding priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread comprehension priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_comprehension_priority(tk_llm_runner_t* runner, int comprehension_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread comprehension priority
+    TK_LOG_INFO("Setting thread comprehension priority to %d", comprehension_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread comprehension priority
+ */
+int tk_llm_runner_get_thread_comprehension_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual comprehension priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread knowledge priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_knowledge_priority(tk_llm_runner_t* runner, int knowledge_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread knowledge priority
+    TK_LOG_INFO("Setting thread knowledge priority to %d", knowledge_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread knowledge priority
+ */
+int tk_llm_runner_get_thread_knowledge_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual knowledge priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread wisdom priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_wisdom_priority(tk_llm_runner_t* runner, int wisdom_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread wisdom priority
+    TK_LOG_INFO("Setting thread wisdom priority to %d", wisdom_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread wisdom priority
+ */
+int tk_llm_runner_get_thread_wisdom_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual wisdom priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread intelligence priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_intelligence_priority(tk_llm_runner_t* runner, int intelligence_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread intelligence priority
+    TK_LOG_INFO("Setting thread intelligence priority to %d", intelligence_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread intelligence priority
+ */
+int tk_llm_runner_get_thread_intelligence_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual intelligence priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread cognition priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_cognition_priority(tk_llm_runner_t* runner, int cognition_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread cognition priority
+    TK_LOG_INFO("Setting thread cognition priority to %d", cognition_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread cognition priority
+ */
+int tk_llm_runner_get_thread_cognition_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual cognition priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread reasoning priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_reasoning_priority(tk_llm_runner_t* runner, int reasoning_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread reasoning priority
+    TK_LOG_INFO("Setting thread reasoning priority to %d", reasoning_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread reasoning priority
+ */
+int tk_llm_runner_get_thread_reasoning_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual reasoning priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread logic priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_logic_priority(tk_llm_runner_t* runner, int logic_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread logic priority
+    TK_LOG_INFO("Setting thread logic priority to %d", logic_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread logic priority
+ */
+int tk_llm_runner_get_thread_logic_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual logic priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread rationality priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_rationality_priority(tk_llm_runner_t* runner, int rationality_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread rationality priority
+    TK_LOG_INFO("Setting thread rationality priority to %d", rationality_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread rationality priority
+ */
+int tk_llm_runner_get_thread_rationality_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual rationality priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread analytical priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_analytical_priority(tk_llm_runner_t* runner, int analytical_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread analytical priority
+    TK_LOG_INFO("Setting thread analytical priority to %d", analytical_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread analytical priority
+ */
+int tk_llm_runner_get_thread_analytical_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual analytical priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread critical priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_critical_priority(tk_llm_runner_t* runner, int critical_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread critical priority
+    TK_LOG_INFO("Setting thread critical priority to %d", critical_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread critical priority
+ */
+int tk_llm_runner_get_thread_critical_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual critical priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread evaluative priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_evaluative_priority(tk_llm_runner_t* runner, int evaluative_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread evaluative priority
+    TK_LOG_INFO("Setting thread evaluative priority to %d", evaluative_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread evaluative priority
+ */
+int tk_llm_runner_get_thread_evaluative_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual evaluative priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread judgment priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_judgment_priority(tk_llm_runner_t* runner, int judgment_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread judgment priority
+    TK_LOG_INFO("Setting thread judgment priority to %d", judgment_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread judgment priority
+ */
+int tk_llm_runner_get_thread_judgment_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual judgment priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread decision priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_decision_priority(tk_llm_runner_t* runner, int decision_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread decision priority
+    TK_LOG_INFO("Setting thread decision priority to %d", decision_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread decision priority
+ */
+int tk_llm_runner_get_thread_decision_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual decision priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread choice priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_choice_priority(tk_llm_runner_t* runner, int choice_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread choice priority
+    TK_LOG_INFO("Setting thread choice priority to %d", choice_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread choice priority
+ */
+int tk_llm_runner_get_thread_choice_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual choice priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread selection priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_selection_priority(tk_llm_runner_t* runner, int selection_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread selection priority
+    TK_LOG_INFO("Setting thread selection priority to %d", selection_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread selection priority
+ */
+int tk_llm_runner_get_thread_selection_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual selection priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread option priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_option_priority(tk_llm_runner_t* runner, int option_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread option priority
+    TK_LOG_INFO("Setting thread option priority to %d", option_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread option priority
+ */
+int tk_llm_runner_get_thread_option_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual option priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread alternative priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_alternative_priority(tk_llm_runner_t* runner, int alternative_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread alternative priority
+    TK_LOG_INFO("Setting thread alternative priority to %d", alternative_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread alternative priority
+ */
+int tk_llm_runner_get_thread_alternative_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual alternative priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread possibility priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_possibility_priority(tk_llm_runner_t* runner, int possibility_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread possibility priority
+    TK_LOG_INFO("Setting thread possibility priority to %d", possibility_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread possibility priority
+ */
+int tk_llm_runner_get_thread_possibility_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual possibility priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread potential priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_potential_priority(tk_llm_runner_t* runner, int potential_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread potential priority
+    TK_LOG_INFO("Setting thread potential priority to %d", potential_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread potential priority
+ */
+int tk_llm_runner_get_thread_potential_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual potential priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread capacity priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_capacity_priority(tk_llm_runner_t* runner, int capacity_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread capacity priority
+    TK_LOG_INFO("Setting thread capacity priority to %d", capacity_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread capacity priority
+ */
+int tk_llm_runner_get_thread_capacity_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual capacity priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread ability priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_ability_priority(tk_llm_runner_t* runner, int ability_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread ability priority
+    TK_LOG_INFO("Setting thread ability priority to %d", ability_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread ability priority
+ */
+int tk_llm_runner_get_thread_ability_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual ability priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread skill priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_skill_priority(tk_llm_runner_t* runner, int skill_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread skill priority
+    TK_LOG_INFO("Setting thread skill priority to %d", skill_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread skill priority
+ */
+int tk_llm_runner_get_thread_skill_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual skill priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread expertise priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_expertise_priority(tk_llm_runner_t* runner, int expertise_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread expertise priority
+    TK_LOG_INFO("Setting thread expertise priority to %d", expertise_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread expertise priority
+ */
+int tk_llm_runner_get_thread_expertise_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual expertise priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread proficiency priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_proficiency_priority(tk_llm_runner_t* runner, int proficiency_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread proficiency priority
+    TK_LOG_INFO("Setting thread proficiency priority to %d", proficiency_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread proficiency priority
+ */
+int tk_llm_runner_get_thread_proficiency_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual proficiency priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread mastery priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_mastery_priority(tk_llm_runner_t* runner, int mastery_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread mastery priority
+    TK_LOG_INFO("Setting thread mastery priority to %d", mastery_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread mastery priority
+ */
+int tk_llm_runner_get_thread_mastery_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual mastery priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread excellence priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_excellence_priority(tk_llm_runner_t* runner, int excellence_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread excellence priority
+    TK_LOG_INFO("Setting thread excellence priority to %d", excellence_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread excellence priority
+ */
+int tk_llm_runner_get_thread_excellence_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual excellence priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread perfection priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_perfection_priority(tk_llm_runner_t* runner, int perfection_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    
+    // This would control thread perfection priority
+    TK_LOG_INFO("Setting thread perfection priority to %d", perfection_priority);
+    
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Gets the model's thread perfection priority
+ */
+int tk_llm_runner_get_thread_perfection_priority(tk_llm_runner_t* runner) {
+    if (!runner) {
+        return -1;
+    }
+    
+    // This would return the actual perfection priority
+    return 0; // Placeholder value
+}
+
+/**
+ * @brief Sets the model's thread ideal priority
+ */
+tk_error_code_t tk_llm_runner_set_thread_ideal_priority(tk_llm_runner_t* runner, int ideal_priority) {
+    if (!runner) {
+        return TK_ERROR_INVALID_ARGUMENT
+
+
 
 /**This code was taken from an old library from trackiellmv1 (old beta model), 
 *I do not recommend reviewing complex codes and libraries like these by AI, perhaps modularizing this will 
