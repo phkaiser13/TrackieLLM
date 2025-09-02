@@ -11,27 +11,6 @@
   <em>Engineered with precision and innovation for the 2025 Industrial Innovation Olympiad</em>
 </p>
 
----
-
-## 📌 Quick Links & Downloads
-
-<div align="center">
-  <!-- Apple App badge (link points to trackway landing page for iOS) -->
-  <a href="https://trackway.org/downloads/trackiestudio-ios" title="Download TrackieStudio for iOS">
-    <img alt="Download on the App Store" src="https://img.icons8.com/?size=100&id=S4KuN6l5Vsz6&format=png&color=000000" width="45"/>
-  </a>
-  &nbsp;&nbsp;
-  <!-- Google Play badge (link points to trackway landing page for Android) -->
-  <a href="https://trackway.org/downloads/trackiestudio-android" title="Download TrackieStudio for Android">
-    <img alt="Get it on Google Play" src="https://img.icons8.com/?size=100&id=L1ws9zn2uD01&format=png&color=000000" width="45"/>
-  </a>
-  &nbsp;&nbsp;
-</div>
-
-> Direct repository: `https://github.com/phkaiser13/trackway` — primary code, assets and releases (official mirror for hardware blueprints & TrackieStudio releases).
-
----
-
 ## 🌐 Overview
 
 TrackieLLM is a **production-grade multimodal AI framework** designed to expand perception, mobility, and safety for people with visual impairment. It fuses low-latency computer vision, robust audio processing and an on-device LLM core to deliver near real-time reasoning and assistive actions across embedded and mobile platforms.
@@ -269,7 +248,7 @@ Each form factor includes:
 ## 🤝 Social Impact & Donations
 We believe in building solutions that serve communities. Consider supporting:
 
-* [APAE](https://www.apaebrasil.org.br/) — Association of Parents and Friends of the Exceptional
+* [APAE](https://apaebrasil.org.br/) — Association of Parents and Friends of the Exceptional
 * [Fundação Dorina Nowill](https://fundacaodorina.org.br/) — Support for visually impaired individuals
 * [UNICEF](https://www.unicef.org/)
 
