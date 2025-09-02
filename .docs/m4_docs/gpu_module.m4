@@ -1,4 +1,4 @@
-include(`docs/m4_docs/gpu_backend.m4')dnl
+include(`.docs/m4_docs/gpu_backend.m4')dnl
 <!-- This documentation was written by Jules - Google labs bot. -->
 
 # GPU Module
