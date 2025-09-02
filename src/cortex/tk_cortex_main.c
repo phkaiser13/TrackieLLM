@@ -632,4 +632,338 @@ static tk_error_code_t cortex_process_vision_input(tk_cortex_t* cortex) {
     }
     
     // Get the latest frame
-    size_t read_idx = (cortex->video_buffer.write_index - 1 + cortex->video
+    size_t read_idx = (cortex->video_buffer.write_index - 1 + cortex->video_buffer.frame_capacity) % cortex->video_buffer.frame_capacity;
+    tk_video_frame_t* frame = &cortex->video_buffer.frames[read_idx];
+    
+    cortex->video_buffer.has_new_frame = false;
+    pthread_mutex_unlock(&cortex->video_buffer.mutex);
+    
+    uint64_t start_time = get_current_time_ns();
+    
+    // Process the frame through vision pipeline
+    cortex_change_state(cortex, TK_STATE_PROCESSING);
+    
+    tk_vision_result_t* vision_result = NULL;
+    tk_vision_analysis_flags_t analysis_flags = TK_VISION_PRESET_ENVIRONMENT_AWARENESS;
+    
+    tk_error_code_t result = tk_vision_pipeline_process_frame(
+        cortex->vision_pipeline,
+        frame,
+        analysis_flags,
+        start_time,
+        &vision_result
+    );
+    
+    if (result != TK_SUCCESS) {
+        tk_log_error("Vision pipeline processing failed: %d", result);
+        cortex_change_state(cortex, TK_STATE_IDLE);
+        return result;
+    }
+    
+    // Update contextual reasoner with vision results
+    result = tk_contextual_reasoner_update_vision_context(cortex->contextual_reasoner, vision_result);
+    if (result != TK_SUCCESS) {
+        tk_log_warning("Failed to update vision context: %d", result);
+    }
+    
+    // Clean up vision result
+    tk_vision_result_destroy(&vision_result);
+    
+    cortex->performance_stats.last_vision_process_time_ns = get_current_time_ns() - start_time;
+    cortex_change_state(cortex, TK_STATE_IDLE);
+    
+    return TK_SUCCESS;
+}
+
+static tk_error_code_t cortex_process_navigation_analysis(tk_cortex_t* cortex) {
+    tk_error_code_t result;
+    
+    // Get current device orientation from sensor fusion
+    tk_quaternion_t orientation;
+    result = tk_sensors_fusion_get_orientation(cortex->sensor_fusion, &orientation);
+    if (result != TK_SUCCESS) {
+        tk_log_warning("Failed to get device orientation: %d", result);
+        // Use default orientation
+        orientation.w = 1.0f;
+        orientation.x = orientation.y = orientation.z = 0.0f;
+    }
+    
+    // Get the latest depth map from vision results (this would need to be cached)
+    // For now, we'll simulate this step
+    tk_vision_depth_map_t* depth_map = NULL; // Would get from cached vision results
+    
+    if (!depth_map) {
+        return TK_SUCCESS; // Skip navigation if no depth data
+    }
+    
+    // Update navigation engine
+    result = tk_navigation_engine_update(cortex->navigation_engine, depth_map, &orientation);
+    if (result != TK_SUCCESS) {
+        tk_log_warning("Navigation engine update failed: %d", result);
+        return result;
+    }
+    
+    // Get traversability map
+    tk_traversability_map_t traversability_map;
+    result = tk_navigation_engine_get_map(cortex->navigation_engine, &traversability_map);
+    if (result != TK_SUCCESS) {
+        return result;
+    }
+    
+    // Update free space detector
+    result = tk_free_space_detector_analyze(cortex->free_space_detector, &traversability_map);
+    if (result != TK_SUCCESS) {
+        tk_log_warning("Free space analysis failed: %d", result);
+    }
+    
+    // Update obstacle tracker
+    float delta_time_s = 1.0f / cortex->config.main_loop_frequency_hz;
+    result = tk_obstacle_tracker_update(cortex->obstacle_tracker, &traversability_map, delta_time_s);
+    if (result != TK_SUCCESS) {
+        tk_log_warning("Obstacle tracking update failed: %d", result);
+    }
+    
+    // Get analysis results
+    tk_free_space_analysis_t free_space_analysis;
+    const tk_obstacle_t* obstacles = NULL;
+    size_t obstacle_count = 0;
+    
+    tk_free_space_detector_get_analysis(cortex->free_space_detector, &free_space_analysis);
+    tk_obstacle_tracker_get_all(cortex->obstacle_tracker, &obstacles, &obstacle_count);
+    
+    // Update contextual reasoner with navigation data
+    result = tk_contextual_reasoner_update_navigation_context(
+        cortex->contextual_reasoner,
+        &traversability_map,
+        &free_space_analysis,
+        obstacles,
+        obstacle_count
+    );
+    
+    if (result != TK_SUCCESS) {
+        tk_log_warning("Failed to update navigation context: %d", result);
+    }
+    
+    return TK_SUCCESS;
+}
+
+static tk_error_code_t cortex_run_llm_inference(tk_cortex_t* cortex) {
+    uint64_t start_time = get_current_time_ns();
+    tk_error_code_t result;
+    
+    cortex_change_state(cortex, TK_STATE_PROCESSING);
+    
+    // Generate context string for LLM
+    char* context_string = NULL;
+    result = tk_contextual_reasoner_generate_context_string(
+        cortex->contextual_reasoner,
+        &context_string,
+        2048 // Token budget
+    );
+    
+    if (result != TK_SUCCESS || !context_string) {
+        tk_log_warning("Failed to generate context string: %d", result);
+        cortex_change_state(cortex, TK_STATE_IDLE);
+        return result;
+    }
+    
+    // Run LLM inference
+    char* llm_response = NULL;
+    result = tk_model_runner_generate_response(cortex->llm_runner, context_string, &llm_response);
+    
+    free(context_string);
+    
+    if (result != TK_SUCCESS) {
+        tk_log_error("LLM inference failed: %d", result);
+        cortex_change_state(cortex, TK_STATE_IDLE);
+        return result;
+    }
+    
+    // Process LLM response through decision engine
+    tk_context_summary_t context_summary;
+    result = tk_contextual_reasoner_get_context_summary(cortex->contextual_reasoner, &context_summary);
+    if (result != TK_SUCCESS) {
+        tk_log_warning("Failed to get context summary: %d", result);
+    }
+    
+    tk_llm_response_t* parsed_response = NULL;
+    result = tk_decision_engine_process_llm_response(
+        cortex->decision_engine,
+        llm_response,
+        &context_summary,
+        &parsed_response
+    );
+    
+    free(llm_response);
+    
+    if (result == TK_SUCCESS && parsed_response) {
+        // Execute the parsed response
+        result = tk_decision_engine_execute_response(cortex->decision_engine, parsed_response);
+        if (result != TK_SUCCESS) {
+            tk_log_warning("Failed to execute LLM response: %d", result);
+        }
+        
+        tk_decision_engine_free_response(&parsed_response);
+    }
+    
+    cortex->performance_stats.last_llm_inference_time_ns = get_current_time_ns() - start_time;
+    cortex_change_state(cortex, TK_STATE_IDLE);
+    
+    return TK_SUCCESS;
+}
+
+static void cortex_update_performance_stats(tk_cortex_t* cortex, uint64_t iteration_time_ns) {
+    float iteration_time_ms = iteration_time_ns / 1000000.0f;
+    
+    // Simple moving average
+    if (cortex->performance_stats.loop_iteration_count == 0) {
+        cortex->performance_stats.average_loop_time_ms = iteration_time_ms;
+    } else {
+        const float alpha = 0.1f; // Smoothing factor
+        cortex->performance_stats.average_loop_time_ms = 
+            (1.0f - alpha) * cortex->performance_stats.average_loop_time_ms + 
+            alpha * iteration_time_ms;
+    }
+    
+    cortex->performance_stats.last_loop_time_ns = iteration_time_ns;
+    
+    // Log performance statistics periodically
+    if ((cortex->performance_stats.loop_iteration_count % 100) == 0) {
+        tk_log_debug("Cortex performance - Avg loop time: %.2fms, Vision: %.2fms, LLM: %.2fms",
+            cortex->performance_stats.average_loop_time_ms,
+            cortex->performance_stats.last_vision_process_time_ns / 1000000.0f,
+            cortex->performance_stats.last_llm_inference_time_ns / 1000000.0f
+        );
+    }
+}
+
+static uint64_t get_current_time_ns(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
+}
+
+static void cortex_change_state(tk_cortex_t* cortex, tk_system_state_e new_state) {
+    pthread_mutex_lock(&cortex->state_mutex);
+    
+    if (cortex->current_state != new_state) {
+        tk_system_state_e old_state = cortex->current_state;
+        cortex->current_state = new_state;
+        
+        pthread_mutex_unlock(&cortex->state_mutex);
+        
+        // Notify callback if provided
+        if (cortex->callbacks.on_state_change) {
+            cortex->callbacks.on_state_change(new_state, cortex->callbacks.on_state_change);
+        }
+        
+        tk_log_debug("Cortex state changed: %d -> %d", old_state, new_state);
+    } else {
+        pthread_mutex_unlock(&cortex->state_mutex);
+    }
+}
+
+//------------------------------------------------------------------------------
+// Audio Pipeline Callbacks
+//------------------------------------------------------------------------------
+
+static void on_vad_event(tk_vad_event_e event, void* user_data) {
+    tk_cortex_t* cortex = (tk_cortex_t*)user_data;
+    
+    switch (event) {
+        case TK_VAD_EVENT_SPEECH_STARTED:
+            tk_log_debug("Speech detection started");
+            cortex_change_state(cortex, TK_STATE_LISTENING);
+            break;
+            
+        case TK_VAD_EVENT_SPEECH_ENDED:
+            tk_log_debug("Speech detection ended");
+            cortex_change_state(cortex, TK_STATE_PROCESSING);
+            break;
+    }
+}
+
+static void on_transcription(const tk_transcription_t* result, void* user_data) {
+    tk_cortex_t* cortex = (tk_cortex_t*)user_data;
+    
+    if (!result || !result->text) {
+        return;
+    }
+    
+    tk_log_info("Transcription received: '%s' (confidence: %.2f, final: %s)", 
+        result->text, result->confidence, result->is_final ? "yes" : "no");
+    
+    // Add to conversation context
+    tk_error_code_t res = tk_contextual_reasoner_add_conversation_turn(
+        cortex->contextual_reasoner,
+        true, // is_user_input
+        result->text,
+        result->confidence
+    );
+    
+    if (res != TK_SUCCESS) {
+        tk_log_warning("Failed to add conversation turn: %d", res);
+    }
+    
+    // Trigger immediate LLM processing for user input
+    if (result->is_final) {
+        tk_error_code_t llm_result = cortex_run_llm_inference(cortex);
+        if (llm_result != TK_SUCCESS) {
+            tk_log_error("Failed to process user input with LLM: %d", llm_result);
+        }
+    }
+}
+
+static void on_tts_audio_ready(const int16_t* audio_data, size_t frame_count, uint32_t sample_rate, void* user_data) {
+    tk_cortex_t* cortex = (tk_cortex_t*)user_data;
+    
+    // Forward TTS audio to the host application
+    if (cortex->callbacks.on_tts_audio_ready) {
+        cortex->callbacks.on_tts_audio_ready(audio_data, frame_count, sample_rate, cortex->config.user_data);
+    }
+}
+
+//------------------------------------------------------------------------------
+// Decision Engine Callbacks
+//------------------------------------------------------------------------------
+
+static void on_action_completed(const tk_action_t* action, void* user_data) {
+    tk_cortex_t* cortex = (tk_cortex_t*)user_data;
+    
+    tk_log_debug("Action %lu completed with status %d", action->action_id, action->status);
+    
+    if (action->status == TK_ACTION_STATUS_FAILED && action->error_message) {
+        tk_log_warning("Action %lu failed: %s", action->action_id, action->error_message);
+    }
+}
+
+static void on_response_ready(const char* response_text, tk_response_priority_e priority, void* user_data) {
+    tk_cortex_t* cortex = (tk_cortex_t*)user_data;
+    
+    if (!response_text) {
+        return;
+    }
+    
+    tk_log_info("Response ready (priority %d): '%s'", priority, response_text);
+    
+    // Add response to conversation context
+    tk_error_code_t res = tk_contextual_reasoner_add_conversation_turn(
+        cortex->contextual_reasoner,
+        false, // is_user_input = false (this is system response)
+        response_text,
+        1.0f // confidence
+    );
+    
+    if (res != TK_SUCCESS) {
+        tk_log_warning("Failed to add response to conversation context: %d", res);
+    }
+    
+    // Send to TTS for speech synthesis
+    cortex_change_state(cortex, TK_STATE_RESPONDING);
+    
+    tk_error_code_t tts_result = tk_audio_pipeline_synthesize_text(cortex->audio_pipeline, response_text);
+    if (tts_result != TK_SUCCESS) {
+        tk_log_error("Failed to synthesize response: %d", tts_result);
+        cortex_change_state(cortex, TK_STATE_IDLE);
+    }
+}
