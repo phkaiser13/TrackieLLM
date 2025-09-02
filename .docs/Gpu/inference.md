@@ -24,25 +24,25 @@ This layered design is crucial for portability and maintainability.
 
 ```mermaid
 graph TD
-    subgraph Cortex & High-Level Logic
-        A[tk_cortex_main] --> B{tk_vision_pipeline};
+    subgraph Cortex_and_High_Level_Logic
+        A[tk_cortex_main] --> B[tk_vision_pipeline];
     end
 
-    subgraph GPU Hardware Abstraction Layer (HAL)
-        B --> C{GPU Dispatcher};
-        C --> D{Select Backend};
+    subgraph GPU_Hardware_Abstraction_Layer_HAL
+        B --> C[GPU Dispatcher];
+        C --> D[Select Backend];
     end
 
-    subgraph Platform-Specific Backends
-        D --> E[CUDA Dispatcher (tk_cuda_dispatch)];
-        D --> F[Metal Dispatcher (tk_metal_dispatch)];
-        D --> G[ROCm Dispatcher (Experimental)];
-        D --> H[Android NDK/Vulkan (via ONNX Runtime)];
+    subgraph Platform_Specific_Backends
+        D --> E[CUDA Dispatcher: tk_cuda_dispatch];
+        D --> F[Metal Dispatcher: tk_metal_dispatch];
+        D --> G[ROCm Dispatcher: Experimental];
+        D --> H[Android NDK/Vulkan via ONNX Runtime];
     end
 
-    subgraph GPU Kernels & Drivers
-        E --> I[CUDA Kernels (.cu)];
-        F --> J[Metal Shaders (.metal)];
+    subgraph GPU_Kernels_and_Drivers
+        E --> I[CUDA Kernels .cu];
+        F --> J[Metal Shaders .metal];
         G --> K[HIP Kernels];
         H --> L[Vendor Drivers];
     end
