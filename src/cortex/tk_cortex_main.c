@@ -1,24 +1,24 @@
 /*
-* Copyright (C) 2025 Pedro Henrique / phdev13
-*
-* File: tk_cortex_main.c
-*
-* This file contains the implementation of the TrackieLLM Cortex - the central
-* "brain" of the system that orchestrates all sensory inputs, reasoning processes,
-* and decision-making capabilities.
-*
-* The Cortex implements a sophisticated real-time processing loop that integrates:
-*   - Multi-modal sensory input (vision, audio, IMU)
-*   - Contextual reasoning and memory management
-*   - Large Language Model inference and response processing
-*   - Decision execution and action coordination
-*   - Thread-safe data exchange with external components
-*
-* This is the executive control system that transforms raw sensory data into
-* intelligent, contextually-aware assistance for users with visual impairments.
-*
-* SPDX-License-Identifier: AGPL-3.0 license
-*/
+ * Copyright (C) 2025 Pedro Henrique / phdev13
+ *
+ * File: tk_cortex_main.c
+ *
+ * This file contains the implementation of the TrackieLLM Cortex - the central
+ * "brain" of the system that orchestrates all sensory inputs, reasoning processes,
+ * and decision-making capabilities.
+ *
+ * The Cortex implements a sophisticated real-time processing loop that integrates:
+ *   - Multi-modal sensory input (vision, audio, IMU)
+ *   - Contextual reasoning and memory management
+ *   - Large Language Model inference and response processing
+ *   - Decision execution and action coordination
+ *   - Thread-safe data exchange with external components
+ *
+ * This is the executive control system that transforms raw sensory data into
+ * intelligent, contextually-aware assistance for users with visual impairments.
+ *
+ * SPDX-License-Identifier: AGPL-3.0 license
+ */
 
 #include "cortex/tk_cortex_main.h"
 #include "cortex/tk_contextual_reasoner.h"
@@ -111,6 +111,10 @@ struct tk_cortex_s {
     // Emergency state
     bool emergency_stop_requested;
     pthread_mutex_t emergency_mutex;
+    
+    // Cache for latest vision results
+    tk_vision_result_t* latest_vision_result;
+    pthread_mutex_t vision_result_mutex;
 };
 
 //------------------------------------------------------------------------------
@@ -160,12 +164,14 @@ tk_error_code_t tk_cortex_create(tk_cortex_t** out_cortex, const tk_cortex_confi
     cortex->should_stop = false;
     cortex->loop_thread_active = false;
     cortex->emergency_stop_requested = false;
+    cortex->latest_vision_result = NULL;
     
     // Initialize mutexes
     if (pthread_mutex_init(&cortex->state_mutex, NULL) != 0 ||
         pthread_mutex_init(&cortex->video_buffer.mutex, NULL) != 0 ||
         pthread_mutex_init(&cortex->audio_buffer.mutex, NULL) != 0 ||
-        pthread_mutex_init(&cortex->emergency_mutex, NULL) != 0) {
+        pthread_mutex_init(&cortex->emergency_mutex, NULL) != 0 ||
+        pthread_mutex_init(&cortex->vision_result_mutex, NULL) != 0) {
         
         tk_log_error("Failed to initialize mutexes");
         free(cortex);
@@ -230,6 +236,7 @@ void tk_cortex_destroy(tk_cortex_t** cortex) {
     pthread_mutex_destroy(&c->video_buffer.mutex);
     pthread_mutex_destroy(&c->audio_buffer.mutex);
     pthread_mutex_destroy(&c->emergency_mutex);
+    pthread_mutex_destroy(&c->vision_result_mutex);
     
     free(c);
     *cortex = NULL;
@@ -350,13 +357,13 @@ static tk_error_code_t cortex_initialize_subsystems(tk_cortex_t* cortex) {
         return result;
     }
     
-    // Initialize vision pipeline
+    // Initialize vision pipeline with model paths from config
     tk_vision_pipeline_config_t vision_config = {
         .backend = (cortex->config.gpu_device_id >= 0) ? TK_VISION_BACKEND_CUDA : TK_VISION_BACKEND_CPU,
         .gpu_device_id = cortex->config.gpu_device_id,
-        .object_detection_model_path = NULL, // Would be set from config paths
-        .depth_estimation_model_path = NULL,
-        .tesseract_data_path = NULL,
+        .object_detection_model_path = cortex->config.model_paths.object_detection_model,
+        .depth_estimation_model_path = cortex->config.model_paths.depth_estimation_model,
+        .tesseract_data_path = cortex->config.model_paths.ocr_data_path,
         .object_confidence_threshold = 0.5f,
         .max_detected_objects = 20
     };
@@ -445,12 +452,12 @@ static tk_error_code_t cortex_initialize_subsystems(tk_cortex_t* cortex) {
         return result;
     }
     
-    // Initialize audio pipeline
+    // Initialize audio pipeline with model paths from config
     tk_audio_pipeline_config_t audio_config = {
         .input_audio_params = { .sample_rate = 16000, .channels = 1 },
-        .asr_model_path = NULL, // Would be set from config paths
-        .vad_model_path = NULL,
-        .tts_model_dir_path = NULL,
+        .asr_model_path = cortex->config.model_paths.asr_model,
+        .vad_model_path = cortex->config.model_paths.vad_model,
+        .tts_model_dir_path = cortex->config.model_paths.tts_model_dir,
         .user_language = cortex->config.user_language,
         .user_data = cortex,
         .vad_silence_threshold_ms = 500.0f,
@@ -481,7 +488,7 @@ static tk_error_code_t cortex_initialize_subsystems(tk_cortex_t* cortex) {
         return result;
     }
     
-    // Initialize LLM runner
+    // Initialize LLM runner with model path from config
     tk_model_runner_config_t llm_config = {
         .model_path = cortex->config.model_paths.llm_model,
         .max_context_length = 4096,
@@ -506,6 +513,11 @@ static void cortex_cleanup_subsystems(tk_cortex_t* cortex) {
     }
     
     tk_log_info("Cleaning up Cortex subsystems");
+    
+    // Clean up cached vision result
+    if (cortex->latest_vision_result) {
+        tk_vision_result_destroy(&cortex->latest_vision_result);
+    }
     
     tk_model_runner_destroy(&cortex->llm_runner);
     tk_task_scheduler_destroy(&cortex->task_scheduler);
@@ -666,8 +678,13 @@ static tk_error_code_t cortex_process_vision_input(tk_cortex_t* cortex) {
         tk_log_warning("Failed to update vision context: %d", result);
     }
     
-    // Clean up vision result
-    tk_vision_result_destroy(&vision_result);
+    // Cache the latest vision result for navigation analysis
+    pthread_mutex_lock(&cortex->vision_result_mutex);
+    if (cortex->latest_vision_result) {
+        tk_vision_result_destroy(&cortex->latest_vision_result);
+    }
+    cortex->latest_vision_result = vision_result;
+    pthread_mutex_unlock(&cortex->vision_result_mutex);
     
     cortex->performance_stats.last_vision_process_time_ns = get_current_time_ns() - start_time;
     cortex_change_state(cortex, TK_STATE_IDLE);
@@ -688,9 +705,14 @@ static tk_error_code_t cortex_process_navigation_analysis(tk_cortex_t* cortex) {
         orientation.x = orientation.y = orientation.z = 0.0f;
     }
     
-    // Get the latest depth map from vision results (this would need to be cached)
-    // For now, we'll simulate this step
-    tk_vision_depth_map_t* depth_map = NULL; // Would get from cached vision results
+    // Get the latest depth map from cached vision results
+    pthread_mutex_lock(&cortex->vision_result_mutex);
+    tk_vision_depth_map_t* depth_map = NULL;
+    
+    if (cortex->latest_vision_result) {
+        depth_map = &cortex->latest_vision_result->depth_map;
+    }
+    pthread_mutex_unlock(&cortex->vision_result_mutex);
     
     if (!depth_map) {
         return TK_SUCCESS; // Skip navigation if no depth data
@@ -854,7 +876,7 @@ static void cortex_change_state(tk_cortex_t* cortex, tk_system_state_e new_state
         
         // Notify callback if provided
         if (cortex->callbacks.on_state_change) {
-            cortex->callbacks.on_state_change(new_state, cortex->callbacks.on_state_change);
+            cortex->callbacks.on_state_change(new_state, cortex->callbacks.user_data);
         }
         
         tk_log_debug("Cortex state changed: %d -> %d", old_state, new_state);
@@ -879,6 +901,9 @@ static void on_vad_event(tk_vad_event_e event, void* user_data) {
         case TK_VAD_EVENT_SPEECH_ENDED:
             tk_log_debug("Speech detection ended");
             cortex_change_state(cortex, TK_STATE_PROCESSING);
+            break;
+            
+        default:
             break;
     }
 }
@@ -919,8 +944,11 @@ static void on_tts_audio_ready(const int16_t* audio_data, size_t frame_count, ui
     
     // Forward TTS audio to the host application
     if (cortex->callbacks.on_tts_audio_ready) {
-        cortex->callbacks.on_tts_audio_ready(audio_data, frame_count, sample_rate, cortex->config.user_data);
+        cortex->callbacks.on_tts_audio_ready(audio_data, frame_count, sample_rate, cortex->callbacks.user_data);
     }
+    
+    // Change state back to idle after TTS is complete
+    cortex_change_state(cortex, TK_STATE_IDLE);
 }
 
 //------------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2025 Pedro Henrique / phdev13
  *
- * File: tk_text_recognition.hpppp
+ * File: tk_text_recognition.hpp
  *
  * This header file defines the public API for the Text Recognition (OCR) module.
  * This component integrates Tesseract OCR to extract text from images captured
