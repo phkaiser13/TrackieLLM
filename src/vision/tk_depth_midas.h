@@ -18,7 +18,7 @@
 * The API abstracts the specifics of the ONNX Runtime, model-specific pre- and
 * post-processing, and memory management for the large output tensors.
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #ifndef TRACKIELLM_VISION_TK_DEPTH_MIDAS_H

@@ -18,7 +18,7 @@
 * model. It is designed to run filters (e.g., Kalman, Madgwick, or simpler
 * complementary filters) to produce stable and reliable state estimations.
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #ifndef TRACKIELLM_SENSORS_TK_SENSORS_FUSION_H

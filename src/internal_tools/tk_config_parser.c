@@ -8,7 +8,7 @@
 * including creation, parsing from a file, value retrieval, and destruction.
 * The internal storage is a dynamically growing array of key-value pairs.
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #include "tk_config_parser.h"

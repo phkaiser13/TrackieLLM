@@ -16,7 +16,7 @@
 * This module consumes the output of the main navigation engine (`tk_path_planner`)
 * and provides its analysis to the Cortex.
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #ifndef TRACKIELLM_NAVIGATION_TK_FREE_SPACE_DETECTOR_H

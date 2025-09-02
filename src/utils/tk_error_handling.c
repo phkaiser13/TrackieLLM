@@ -8,7 +8,7 @@
 * mapping from an error code enum to a human-readable, null-terminated string.
 * This implementation is designed to be fast, thread-safe, and comprehensive.
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #include "tk_error_handling.h"

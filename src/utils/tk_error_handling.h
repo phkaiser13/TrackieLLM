@@ -10,7 +10,7 @@
 * return values. A centralized error system is critical for building a robust,
 * maintainable, and debuggable application.
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #ifndef TRACKIELLM_UTILS_TK_ERROR_HANDLING_H

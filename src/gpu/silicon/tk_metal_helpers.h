@@ -16,7 +16,7 @@
 * they return objects with a +1 retain count. The caller is responsible for
 * releasing these objects.
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #ifndef TRACKIELLM_GPU_SILICON_TK_METAL_HELPERS_H

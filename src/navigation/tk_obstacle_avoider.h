@@ -16,7 +16,7 @@
 *
 * The API is centered around the `tk_obstacle_tracker_t` opaque object.
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #ifndef TRACKIELLM_NAVIGATION_TK_OBSTACLE_AVOIDER_H

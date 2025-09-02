@@ -9,7 +9,7 @@
 * and performance-conscious macros that avoid evaluating log arguments when the
 * corresponding log level is disabled.
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #ifndef TRACKIELLM_UTILS_TK_LOGGING_H

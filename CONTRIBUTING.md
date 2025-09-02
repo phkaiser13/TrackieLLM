@@ -139,7 +139,7 @@ File header rule:
   *
   * Explicação rica e detalhada do arquivo e sua função.
   *
-  * SPDX-License-Identifier:
+  * SPDX-License-Identifier: AGPL-3.0 license
   */
   ```
 

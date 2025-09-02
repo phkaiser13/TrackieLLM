@@ -18,7 +18,7 @@
 *
 * This module acts as the gatekeeper to the TTS engine.
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #ifndef TRACKIELLM_INTERACTION_TK_FEEDBACK_MANAGER_H

@@ -18,7 +18,7 @@
 * and Non-Max Suppression (NMS) thresholds, which are critical for tuning
 * performance and accuracy in real-world scenarios.
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #ifndef TRACKIELLM_VISION_TK_OBJECT_DETECTOR_H

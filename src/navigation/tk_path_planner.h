@@ -16,7 +16,7 @@
 * that requires detailed physical configuration (e.g., camera height) to
 * accurately model the relationship between the device and the world.
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #ifndef TRACKIELLM_NAVIGATION_TK_PATH_PLANNER_H

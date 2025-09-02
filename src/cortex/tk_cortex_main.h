@@ -24,7 +24,7 @@
 *   4. Management of the system's operational state (e.g., idle, listening,
 *      processing, responding).
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #ifndef TRACKIELLM_CORTEX_TK_CORTEX_MAIN_H

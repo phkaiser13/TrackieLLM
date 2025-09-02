@@ -17,7 +17,7 @@
 * recompiling the core application. The parser's output is a structured command
 * object, not a raw string, which simplifies the decision-making logic in the Cortex.
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #ifndef TRACKIELLM_INTERACTION_TK_VOICE_COMMANDS_H

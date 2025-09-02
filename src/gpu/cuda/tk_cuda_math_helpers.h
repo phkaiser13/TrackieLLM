@@ -19,7 +19,7 @@
 * vision and navigation algorithms. All functions are aggressively inlined for
 * maximum performance.
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #ifndef TRACKIELLM_GPU_CUDA_TK_CUDA_MATH_HELPERS_H

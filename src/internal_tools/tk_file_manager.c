@@ -17,7 +17,7 @@
 * the number of reallocations. All external inputs are validated, and all system
 * call return values are checked to ensure robust error reporting.
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #include "tk_file_manager.h"

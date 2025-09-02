@@ -20,7 +20,7 @@
 *     complete computational workflows (e.g., "preprocess this image"), rather
 *     than low-level kernel launch primitives.
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #ifndef TRACKIELLM_GPU_CUDA_TK_CUDA_DISPATCH_H

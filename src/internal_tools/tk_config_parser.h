@@ -9,7 +9,7 @@
 * into the application. The design uses an opaque handle (tk_config_t) to
 * encapsulate the internal data structures.
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #ifndef TRACKIELLM_INTERNAL_TOOLS_TK_CONFIG_PARSER_H

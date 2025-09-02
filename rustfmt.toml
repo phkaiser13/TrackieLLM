@@ -9,7 +9,7 @@
 # regardless of the developer's local editor settings. This consistency is
 # vital for readability and maintainability.
 #
-# SPDX-License-Identifier:
+# SPDX-License-Identifier: AGPL-3.0 license
 #
 
 # The edition of Rust to use for formatting. This should match the edition

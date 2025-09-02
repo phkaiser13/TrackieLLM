@@ -9,7 +9,7 @@
 # verify the presence of all listed dependencies, ensuring a consistent and
 # reproducible development environment.
 #
-# SPDX-License-Identifier:
+# SPDX-License-Identifier: AGPL-3.0 license
 #
 
 # Tap into third-party repositories if necessary.

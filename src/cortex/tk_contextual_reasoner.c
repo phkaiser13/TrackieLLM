@@ -7,7 +7,7 @@
  * The engine aggregates multimodal information, scores relevance, decays old
  * context, and produces a compact representation for the LLM.
  *
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: AGPL-3.0 license Apache-2.0
  */
 
 #include "cortex/tk_contextual_reasoner.h"

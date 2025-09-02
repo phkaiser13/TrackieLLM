@@ -8,7 +8,7 @@
 # libraries, defining build options, and including the subdirectories that
 # contain the actual source code and build targets.
 #
-# SPDX-License-Identifier:
+# SPDX-License-Identifier: AGPL-3.0 license
 #
 
 #--------------------------------------------------------------------------------

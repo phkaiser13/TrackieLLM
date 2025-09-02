@@ -21,7 +21,7 @@
 *   - Structured output that differentiates between a textual response and a
 *     request to execute a tool.
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #ifndef TRACKIELLM_AI_MODELS_TK_MODEL_RUNNER_H

@@ -18,7 +18,7 @@
 * change occurs (e.g., speech starts or ends), which is the ideal model for a
 * reactive system.
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #ifndef TRACKIELLM_SENSORS_TK_VAD_SILERO_H

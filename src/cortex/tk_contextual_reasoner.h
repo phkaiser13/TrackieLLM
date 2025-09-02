@@ -27,7 +27,7 @@
 *   - Temporal Context (sequence of events, state transitions)
 *   - User Context (preferences, accessibility needs, current activity)
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #ifndef TRACKIELLM_CORTEX_TK_CONTEXTUAL_REASONER_H

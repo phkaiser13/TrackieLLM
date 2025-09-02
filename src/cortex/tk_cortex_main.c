@@ -17,7 +17,7 @@
 * This is the executive control system that transforms raw sensory data into
 * intelligent, contextually-aware assistance for users with visual impairments.
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #include "cortex/tk_cortex_main.h"

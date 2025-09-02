@@ -24,7 +24,7 @@
 * Ownership of the complex result data is managed explicitly via a dedicated
 * `tk_vision_result_destroy` function, promoting a clear and safe memory model.
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #ifndef TRACKIELLM_VISION_TK_VISION_PIPELINE_H

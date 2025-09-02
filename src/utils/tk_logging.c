@@ -9,7 +9,7 @@
 * manage state, a mutex for synchronization, and standard C library functions
 * for I/O and time formatting.
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #include "tk_logging.h"

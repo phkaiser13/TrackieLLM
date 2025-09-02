@@ -14,7 +14,7 @@
 * - Thread-safe operation with timeout handling
 * - Emergency response capabilities
 *
-* SPDX-License-Identifier: MIT
+* SPDX-License-Identifier: AGPL-3.0 license AGPL-3.0 license
 */
 
 #include "tk_decision_engine.h"

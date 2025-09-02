@@ -24,7 +24,7 @@
 * All resources are managed internally by the opaque `tk_audio_pipeline_t`
 * object, ensuring a clean and safe API for the consumer.
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #ifndef TRACKIELLM_AUDIO_TK_AUDIO_PIPELINE_H

@@ -29,7 +29,7 @@
 *   - Information Actions (describe environment, read text)
 *   - System Actions (change settings, enter specific modes)
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #ifndef TRACKIELLM_CORTEX_TK_DECISION_ENGINE_H

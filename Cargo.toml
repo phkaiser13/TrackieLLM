@@ -9,7 +9,7 @@
 # the `src` directory. This allows for unified dependency management, build
 # profiles, and tooling across all Rust components of the project.
 #
-# SPDX-License-Identifier:
+# SPDX-License-Identifier: AGPL-3.0 license
 #
 
 [workspace]

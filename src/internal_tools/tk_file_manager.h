@@ -22,7 +22,7 @@
 * This module is a foundational component for resource loading, configuration
 * management, and data persistence.
 *
-* SPDX-License-Identifier:
+* SPDX-License-Identifier: AGPL-3.0 license
 */
 
 #ifndef TRACKIELLM_INTERNAL_TOOLS_TK_FILE_MANAGER_H
