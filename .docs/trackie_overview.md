@@ -1,70 +1,80 @@
-# TrackieLLM: Documentação do Projeto
+<!--
+This documentation was written by Jules - Google labs bot.
+Original code by phkaiser13.
+-->
 
-## 1. Conceito Central
+# TrackieLLM: Project Overview
 
-**TrackieLLM** é uma plataforma de assistência multimodal projetada para operar em tempo real como um "companheiro de IA proativo". O núcleo do sistema é uma Inteligência Artificial que atua como um "cérebro", processando informações visuais e auditivas para analisar o contexto, compreender o ambiente e fornecer suporte inteligente ao usuário.
+## 1. Core Concept
 
-O objetivo principal é ampliar a percepção, promover a autonomia e garantir a segurança de pessoas com deficiência visual, revolucionando a forma como interagem com o mundo ao seu redor.
+**TrackieLLM** is a multimodal assistance platform designed to operate in real-time as a "proactive AI companion." The core of the system is an Artificial Intelligence that acts as a "brain," processing visual and auditory information to analyze context, understand the environment, and provide intelligent support to the user.
 
-## 2. Pilares Tecnológicos
+The main goal is to expand perception, promote autonomy, and ensure the safety of people with visual impairments, revolutionizing the way they interact with the world around them.
 
-O TrackieLLM integra três áreas tecnológicas para criar uma percepção unificada do ambiente:
+## 2. Technological Pillars
 
-1.  **Visão Computacional:** Utiliza câmeras para "ver" e interpretar o mundo, reconhecendo rostos, objetos, textos, obstáculos e perigos.
-2.  **Processamento de Áudio:** Captura e compreende comandos de voz (STT), sons do ambiente (VAD) e fornece feedback por áudio (TTS).
-3.  **Inteligência Artificial (LLM):** Um modelo de linguagem grande (Large Language Model) atua como a unidade central de processamento, unindo as informações visuais e sonoras para fornecer um feedback contextualizado e útil em tempo real.
+TrackieLLM integrates three technological areas to create a unified perception of the environment:
 
-## 3. Benefícios e Diferenciais
+1.  **Computer Vision:** Uses cameras to "see" and interpret the world, recognizing faces, objects, texts, obstacles, and dangers.
+2.  **Audio Processing:** Captures and understands voice commands (STT), environmental sounds (VAD), and provides audio feedback (TTS).
+3.  **Artificial Intelligence (LLM):** A Large Language Model acts as the central processing unit, uniting visual and sound information to provide contextualized and useful feedback in real-time.
 
-*   **Autonomia Ampliada:** Permite que o usuário realize tarefas cotidianas com mais independência e explore novos ambientes com confiança.
-*   **Segurança Proativa:** Detecta ativamente riscos como obstáculos, degraus, buracos e fumaça.
-*   **Interação Natural:** A comunicação é feita por comandos de voz, tornando a experiência de uso fluida e intuitiva.
-*   **Percepção Multimodal:** Integra dados de áudio, vídeo e sensores para uma compreensão completa do ambiente.
-*   **Acessibilidade:** Posiciona-se como uma alternativa poderosa e de baixo custo a soluções comerciais caras.
+## 3. Benefits and Differentiators
 
-## 4. Stack de Modelos de IA
+*   **Expanded Autonomy:** Allows the user to perform daily tasks with more independence and explore new environments with confidence.
+*   **Proactive Safety:** Actively detects risks such as obstacles, steps, holes, and smoke.
+*   **Natural Interaction:** Communication is done through voice commands, making the user experience fluid and intuitive.
+*   **Multimodal Perception:** Integrates data from audio, video, and sensors for a complete understanding of the environment.
+*   **Accessibility:** Positions itself as a powerful and low-cost alternative to expensive commercial solutions.
 
-O TrackieLLM é construído sobre um conjunto de modelos de IA otimizados para execução offline e em hardware com recursos limitados.
+## 4. AI Model Stack
 
-*   **IA Central (LLM):**
-    *   **Modelo:** `Mistral-7B`
-    *   **Formato:** GGUF (otimizado para `llama.cpp`)
+TrackieLLM is built on a set of AI models optimized for offline execution on resource-constrained hardware.
 
-*   **Visão Computacional:**
-    *   **Detecção de Objetos:** `YOLOv5nu` (formato ONNX)
-    *   **Análise de Profundidade e Navegação:** `DPT-SwinV2-Tiny-256` (MiDaS 3.1, ONNX, INT8) para detecção de passos, rampas, espaços livres e pontos de agarre.
-    *   **Reconhecimento de Texto (OCR):** `Tesseract OCR` (via API nativa C++)
+*   **Central AI (LLM):**
+    *   **Model:** `Mistral-7B`
+    *   **Format:** GGUF (optimized for `llama.cpp`)
 
-*   **Processamento de Áudio:**
-    *   **Reconhecimento de Fala (ASR):** `whisper.cpp tiny.en` (formato GGML)
-    *   **Ativação por Voz (Wake Word / VAD):** `Porcupine` e `Silero VAD`
-    *   **Síntese de Voz (TTS):** `Piper` (Rhasspy) com vozes pré-treinadas em PT-BR.
+*   **Computer Vision:**
+    *   **Object Detection:** `YOLOv5nu` (ONNX format)
+    *   **Depth Analysis and Navigation:** `DPT-SwinV2-Tiny-256` (MiDaS 3.1, ONNX, INT8) for detecting steps, ramps, free spaces, and grasp points.
+    *   **Text Recognition (OCR):** `Tesseract OCR` (via native C++ API)
 
-## 5. Plataformas de Execução
+*   **Audio Processing:**
+    *   **Speech Recognition (ASR):** `whisper.cpp tiny.en` (GGML format)
+    *   **Voice Activity Detection (VAD):** `Porcupine` and `Silero VAD`
+    *   **Text-to-Speech (TTS):** `Piper` (Rhasspy) with pre-trained voices in PT-BR.
 
-### Ambientes de Produção (Uso Real)
+## 5. Execution Platforms
 
-O TrackieLLM foi projetado para rodar de forma nativa e otimizada nos seguintes sistemas:
+### Production Environments (Real Use)
 
-*   **Hardware Embarcado:**
-    *   **Orange Pi (8GB RAM + CUDA):** Plataforma principal.
-    *   **Orange Pi (RISC-V, 8GB RAM + CUDA):** Plataforma secundária de alta praticidade.
-    *   **Raspberry Pi / Orange Pi (Modelos de 8-32GB RAM):** Para desenvolvimento e uso pela comunidade.
-*   **Dispositivos Móveis (via app `TrackWay`):**
-    *   **Android:** Suporte nativo.
-    *   **iOS:** Suporte nativo com alta prioridade, otimizado para o acelerador gráfico **Metal**.
-*   **Desktop (via terminal `TrackWay`):**
-    *   **Linux:** Suporte a CUDA e ROCm.
+TrackieLLM is designed to run natively and optimized on the following systems:
 
-### Ambientes de Teste e Apresentação (via `Trackie Studio`)
+*   **Embedded Hardware:**
+    *   **Orange Pi (8GB RAM + CUDA):** Main platform.
+    *   **Orange Pi (RISC-V, 8GB RAM + CUDA):** Secondary high-practicality platform.
+    *   **Raspberry Pi / Orange Pi (8-32GB RAM models):** For development and community use.
+*   **Mobile Devices (via `TrackWay` app):**
+    *   **Android:** Native support.
+    *   **iOS:** Native support with high priority, optimized for the **Metal** graphics accelerator.
+*   **Desktop (via `TrackWay` terminal):**
+    *   **Linux:** Support for CUDA and ROCm.
 
-*   **Windows, macOS e Linux:** Para fins de demonstração, testes e treinamento de modelos.
+### Test and Presentation Environments (via `Trackie Studio`)
 
-## 6. Compilação e Implantação
+*   **Windows, macOS, and Linux:** For demonstration, testing, and model training purposes.
 
-*   Nos aplicativos **Trackie Studio** (Desktop) e **TrackWay** (Mobile), o núcleo do TrackieLLM deve ser compilado como uma biblioteca dinâmica (`.dll`, `.so`, `.dylib`, etc.).
-*   Nos dispositivos embarcados (Orange/Raspberry Pi), o sistema pode rodar como um executável nativo direto no sistema operacional (com kernel modificado) ou dentro de um contêiner para portabilidade.
+## 6. Compilation and Deployment
 
-## 7. Missão do Projeto
+*   In the **Trackie Studio** (Desktop) and **TrackWay** (Mobile) applications, the TrackieLLM core must be compiled as a dynamic library (`.dll`, `.so`, `.dylib`, etc.).
+*   On embedded devices (Orange/Raspberry Pi), the system can run as a direct native executable on the operating system (with a modified kernel) or inside a container for portability.
 
-> Levar acessibilidade inteligente a ambientes educacionais, industriais e ao dia a dia por meio de IA de ponta e hardware acessível.
+## 7. Project Mission
+
+> To bring intelligent accessibility to educational, industrial, and daily life environments through cutting-edge AI and accessible hardware.
+
+## Developer and Author
+
+*   **Original Code:** phkaiser13
+*   **Documentation:** Jules - Google labs bot

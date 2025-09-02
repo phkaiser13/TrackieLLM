@@ -1,4 +1,7 @@
-<!-- This documentation was written by Jules - Google labs bot. -->
+<!--
+This documentation was written by Jules - Google labs bot.
+Original code by phkaiser13.
+-->
 
 # Cortex Module
 
@@ -65,3 +68,8 @@ This hybrid architecture ensures both high performance and robust, memory-safe o
 - **Audio:** Receives user commands (ASR) and provides text for synthesis (TTS).
 - **Sensors:** Receives fused sensor data (e.g., from IMU) to understand user movement and orientation.
 - **Interaction:** Sends commands to the feedback manager to communicate with the user (voice, haptics).
+
+## Developer and Author
+
+*   **Original Code:** phkaiser13
+*   **Documentation:** Jules - Google labs bot

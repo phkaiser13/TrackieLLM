@@ -1,6 +1,11 @@
+<!--
+This documentation was written by Jules - Google labs bot.
+Original code by phkaiser13.
+-->
+
 # TrackieLLM GPU Inference Architecture
 
-## 1\. Overview & Core Philosophy
+## 1. Overview & Core Philosophy
 
 The TrackieLLM platform is engineered for high-performance, real-time multimodal processing on a diverse range of hardware, from powerful edge servers to resource-constrained embedded systems. A cornerstone of this capability is its sophisticated GPU acceleration architecture. When a compatible GPU is available, the system offloads computationally intensive tasks—primarily computer vision model inference—to achieve the low latency required for real-time user assistance.
 
@@ -16,7 +21,7 @@ Our architecture is built on several key engineering principles:
   * **Opaque Resource Handles:** All GPU resources (memory buffers, textures, events) are managed via opaque handles. This is a critical security and stability feature that prevents other modules from directly manipulating GPU memory or leaking resources.
   * **Workflow-Oriented API:** The HAL exposes high-level functions that represent complete computational workflows (e.g., `preprocess_image_for_onnx`) rather than low-level primitives (`launch_kernel_X`). This simplifies integration and reduces the surface area for errors.
 
-## 2\. The GPU Hardware Abstraction Layer (HAL)
+## 2. The GPU Hardware Abstraction Layer (HAL)
 
 To support multiple platforms, TrackieLLM implements a HAL that provides a consistent interface to the underlying GPU hardware. The `tk_vision_pipeline` and other high-level modules interact with this HAL, which in turn routes commands to the appropriate platform-specific backend.
 
@@ -54,7 +59,7 @@ graph TD
 
 The `CMakeLists.txt` file contains the logic for detecting the host system and enabling the appropriate backend during compilation using options like `TK_ENABLE_CUDA` and `TK_ENABLE_METAL`.
 
-## 3\. NVIDIA CUDA Backend (Primary HPC Backend)
+## 3. NVIDIA CUDA Backend (Primary HPC Backend)
 
 For NVIDIA GPUs, found in desktop systems and high-performance embedded boards like the Orange Pi with CUDA or Jetson series, the CUDA backend is the primary choice. It offers the highest performance and the most mature toolchain.
 
@@ -75,7 +80,7 @@ For NVIDIA GPUs, found in desktop systems and high-performance embedded boards l
     c.  Launches the `tk_kernels_preprocess_image` CUDA kernel onto a CUDA stream. This kernel performs resizing, data type conversion (uint8 to float32), layout conversion (interleaved to planar NCHW), and normalization in a single, highly parallel pass.
 5.  Control returns immediately to the `tk_vision_pipeline`, which can proceed to enqueue the ONNX Runtime inference task. ONNX Runtime, also configured with a CUDA provider, will then consume the pre-processed tensor directly from GPU memory without needing a round-trip to the CPU.
 
-## 4\. Apple Metal Backend (macOS & iOS)
+## 4. Apple Metal Backend (macOS & iOS)
 
 For Apple platforms, Metal is the native, high-performance graphics and compute API. TrackieLLM leverages Metal for optimal performance on iPhones, iPads, and macOS devices. This is a high-priority, fully supported backend.
 
@@ -97,14 +102,14 @@ The flow is conceptually similar to CUDA but uses Metal's paradigms:
 6.  It binds the input texture and output `MTLBuffer` and dispatches the compute kernel.
 7.  The command buffer is committed, and control returns to the caller. The ONNX Runtime, configured with a CoreML (which uses Metal) provider, can then run inference on the GPU-resident data.
 
-## 5\. AMD ROCm Backend (Experimental)
+## 5. AMD ROCm Backend (Experimental)
 
 Support for AMD GPUs is provided through ROCm, which is primarily targeted at Linux-based desktop and server environments.
 
   * **Approach:** For this project, the ROCm support is designed as a lightweight wrapper. The `CMakeLists.txt` indicates that ROCm is an optional, experimental backend. The primary strategy involves using the **HIP (Heterogeneous-compute Interface for Portability)** API. HIP provides a C++ dialect and runtime that is very similar to CUDA, allowing developers to write code that can be compiled to run on both AMD and NVIDIA hardware with minimal changes.
   * **Implementation:** The ROCm backend consists of wrappers that map the high-level dispatch calls to their HIP equivalents. Given the similarities, much of the logic from the CUDA backend can be reused. For example, `cudaMalloc` becomes `hipMalloc`. This makes ROCm support primarily a matter of build system configuration and API mapping rather than a complete rewrite of the GPU logic.
 
-## 6\. Android Accelerators (Vulkan & Others)
+## 6. Android Accelerators (Vulkan & Others)
 
 Android presents a more fragmented ecosystem with a variety of GPU vendors (Qualcomm Adreno, ARM Mali, etc.). TrackieLLM's strategy for Android focuses on leveraging standardized APIs and the capabilities of the ONNX Runtime.
 
@@ -118,7 +123,7 @@ Android presents a more fragmented ecosystem with a variety of GPU vendors (Qual
 
 This approach abstracts the complexity of dealing with different Android GPU drivers and vendor-specifics, delegating the task to the specialized ONNX Runtime team.
 
-## 7\. Model Execution and Further Reading
+## 7. Model Execution and Further Reading
 
 The primary beneficiaries of this GPU architecture are the computer vision models, which are typically formatted as ONNX files.
 

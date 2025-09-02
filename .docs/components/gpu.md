@@ -1,4 +1,7 @@
-<!-- This documentation was written by Jules - Google labs bot. -->
+<!--
+This documentation was written by Jules - Google labs bot.
+Original code by phkaiser13.
+-->
 
 # GPU Module
 
@@ -47,3 +50,8 @@ The module is designed with a backend-based architecture. A generic frontend dis
 
 -   **Vision and Audio Modules:** These modules are the primary clients of the GPU module. They use it to run their respective neural network models (YOLO, MiDaS, Whisper, etc.) on the GPU.
 -   **Build System (`CMakeLists.txt`):** The build system detects the available toolchains (CUDA toolkit, ROCm toolchain, Xcode) and compiles the appropriate backend. Build flags like `TRACKIE_ENABLE_CUDA` are used to control which backends are enabled.
+
+## Developer and Author
+
+*   **Original Code:** phkaiser13
+*   **Documentation:** Jules - Google labs bot

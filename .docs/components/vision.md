@@ -1,4 +1,7 @@
-<!-- This documentation was written by Jules - Google labs bot. -->
+<!--
+This documentation was written by Jules - Google labs bot.
+Original code by phkaiser13.
+-->
 
 # Vision Module
 
@@ -65,3 +68,8 @@ The vision processing pipeline operates as follows:
 - **Cortex:** The primary consumer of the Vision module's output. It uses the structured visual data to understand the environment and make decisions.
 - **GPU:** The Vision module heavily relies on the GPU for accelerating the ONNX model inference (CUDA, ROCm, or Metal).
 - **Sensors:** Vision data is correlated with IMU data in the Cortex to distinguish between user movement and camera movement.
+
+## Developer and Author
+
+*   **Original Code:** phkaiser13
+*   **Documentation:** Jules - Google labs bot

@@ -1,4 +1,7 @@
-<!-- This documentation was written by Jules - Google labs bot. -->
+<!--
+This documentation was written by Jules - Google labs bot.
+Original code by phkaiser13.
+-->
 
 # Sensors Module
 
@@ -48,3 +51,8 @@ The Sensors module is designed to be a lightweight and efficient component, runn
     -   **Sensor-Aided Tracking:** Predicting the location of an object in the next frame based on camera motion.
 
 -   **Audio:** The audio module can use the accelerometer data to detect footsteps and dynamically adjust the noise cancellation profile.
+
+## Developer and Author
+
+*   **Original Code:** phkaiser13
+*   **Documentation:** Jules - Google labs bot
