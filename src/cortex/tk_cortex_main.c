@@ -34,6 +34,7 @@
 #include "utils/tk_error_handling.h"
 #include "async_tasks/tk_task_scheduler.h"
 #include "sensors/tk_sensors_fusion.h"
+#include "ffi/c_api/tk_ffi_api.h" // For TkModuleType, TkStatus, etc.
 
 #include <stdlib.h>
 #include <string.h>
@@ -42,6 +43,13 @@
 #include <time.h>
 #include <errno.h>
 #include <stdatomic.h>
+
+// Forward declarations for payload management
+static tk_error_code_t event_payload_copy(tk_cortex_event_type_e type, void** dest_payload, const void* src_payload);
+static void event_payload_free(tk_cortex_event_type_e type, void* payload);
+static tk_error_code_t deep_copy_vision_result(tk_vision_result_t** dest, const tk_vision_result_t* src);
+static tk_error_code_t deep_copy_transcription(tk_transcription_t** dest, const tk_transcription_t* src);
+
 
 //------------------------------------------------------------------------------
 // Event System Definitions
@@ -143,9 +151,7 @@ static void event_queue_destroy(event_queue_t* queue) {
     if (queue->events) {
         // Iterate through all remaining events and free payloads
         while (read_idx != write_idx) {
-            if (queue->events[read_idx].payload) {
-                free(queue->events[read_idx].payload);
-            }
+            event_payload_free(queue->events[read_idx].type, queue->events[read_idx].payload);
             read_idx = (read_idx + 1) % queue->capacity;
         }
         free(queue->events);
@@ -179,18 +185,22 @@ static tk_error_code_t event_queue_enqueue(event_queue_t* queue, const tk_cortex
 
     // Copy the event into the queue
     size_t write_idx = atomic_load(&queue->write_index);
-    queue->events[write_idx] = *event;
-    // If payload is provided, make a copy
+    queue->events[write_idx].type = event->type;
+    queue->events[write_idx].timestamp_ns = event->timestamp_ns;
+    queue->events[write_idx].payload = NULL; // Start with NULL payload
+
+    // If payload is provided, make a deep copy
     if (event->payload) {
-        // This assumes payload is a simple struct that can be copied by value
-        // For complex payloads, a deep copy strategy would be needed
-        void* payload_copy = malloc(sizeof(*(event->payload)));
-        if (!payload_copy) {
+        tk_error_code_t copy_result = event_payload_copy(
+            event->type,
+            &queue->events[write_idx].payload,
+            event->payload
+        );
+
+        if (copy_result != TK_SUCCESS) {
             pthread_mutex_unlock(&queue->mutex);
-            return TK_ERROR_OUT_OF_MEMORY;
+            return copy_result;
         }
-        memcpy(payload_copy, event->payload, sizeof(*(event->payload)));
-        queue->events[write_idx].payload = payload_copy;
     }
 
     atomic_store(&queue->write_index, (write_idx + 1) % queue->capacity);
@@ -315,6 +325,71 @@ struct tk_cortex_s {
     tk_vision_result_t* latest_vision_result;
     pthread_mutex_t vision_result_mutex;
 };
+
+//------------------------------------------------------------------------------
+// C-Side Module Executor
+//------------------------------------------------------------------------------
+
+// Define the function pointer type that matches the Rust `ModuleExecutor`
+typedef TkStatus (*c_module_executor_fn)(
+    void* context, // Note: Using void* here as TkContext is opaque in C
+    TkModuleType module_type,
+    const char* command_name,
+    void* input
+);
+
+// Forward-declare the C-side executor
+static TkStatus c_module_executor(
+    void* context,
+    TkModuleType module_type,
+    const char* command_name,
+    void* input
+);
+
+// Forward-declare the registration function from the Rust FFI bridge
+extern TkStatus tk_module_register(TkModuleType module_type, c_module_executor_fn executor);
+
+/**
+ * @brief Executor function for all C-side modules.
+ *
+ * This function is registered with the FFI bridge for each C-based module.
+ * It acts as a dispatcher, forwarding commands to the appropriate C subsystem
+ * based on the module type.
+ */
+static TkStatus c_module_executor(
+    void* context,
+    TkModuleType module_type,
+    const char* command_name,
+    void* input)
+{
+    tk_cortex_t* cortex = (tk_cortex_t*)context;
+    if (!cortex) {
+        return TK_STATUS_ERROR_NULL_POINTER;
+    }
+
+    tk_log_debug("C executor called for module %d with command '%s'", module_type, command_name);
+
+    // This is where you would dispatch to the actual C implementation
+    switch (module_type) {
+        case TK_MODULE_VISION:
+            // e.g., handle_vision_command(cortex->vision_pipeline, command_name, input);
+            break;
+        case TK_MODULE_AUDIO:
+            // e.g., handle_audio_command(cortex->audio_pipeline, command_name, input);
+            break;
+        case TK_MODULE_NAVIGATION:
+             // e.g., handle_nav_command(cortex->navigation_engine, command_name, input);
+            break;
+        default:
+            tk_log_error("C executor called for unhandled module type: %d", module_type);
+            return TK_STATUS_ERROR_UNSUPPORTED_FEATURE;
+    }
+
+    // For this example, we just return success without doing anything.
+    // A real implementation would have detailed command handling logic.
+    return TK_STATUS_OK;
+}
+
 
 //------------------------------------------------------------------------------
 // Internal Function Declarations
@@ -606,6 +681,7 @@ static tk_error_code_t cortex_initialize_subsystems(tk_cortex_t* cortex) {
         tk_log_error("Failed to create sensor fusion: %d", result);
         return result;
     }
+    tk_module_register(TK_MODULE_SENSORS, (c_module_executor_fn)c_module_executor);
     
     // Initialize vision pipeline with model paths from config
     tk_vision_pipeline_config_t vision_config = {
@@ -623,6 +699,7 @@ static tk_error_code_t cortex_initialize_subsystems(tk_cortex_t* cortex) {
         tk_log_error("Failed to create vision pipeline: %d", result);
         return result;
     }
+    tk_module_register(TK_MODULE_VISION, (c_module_executor_fn)c_module_executor);
     
     // Initialize navigation engine
     tk_navigation_config_t nav_config = {
@@ -638,6 +715,7 @@ static tk_error_code_t cortex_initialize_subsystems(tk_cortex_t* cortex) {
         tk_log_error("Failed to create navigation engine: %d", result);
         return result;
     }
+    tk_module_register(TK_MODULE_NAVIGATION, (c_module_executor_fn)c_module_executor);
     
     // Initialize free space detector
     tk_free_space_config_t space_config = {
@@ -725,6 +803,7 @@ static tk_error_code_t cortex_initialize_subsystems(tk_cortex_t* cortex) {
         tk_log_error("Failed to create audio pipeline: %d", result);
         return result;
     }
+    tk_module_register(TK_MODULE_AUDIO, (c_module_executor_fn)c_module_executor);
     
     // Initialize task scheduler
     tk_task_scheduler_config_t task_config = {
@@ -753,6 +832,8 @@ static tk_error_code_t cortex_initialize_subsystems(tk_cortex_t* cortex) {
         return result;
     }
     
+    tk_module_register(TK_MODULE_CORTEX, (c_module_executor_fn)c_module_executor);
+
     tk_log_info("All Cortex subsystems initialized successfully");
     return TK_SUCCESS;
 }
@@ -818,10 +899,8 @@ static void* cortex_main_loop_thread(void* arg) {
             }
         }
         
-        // Free event payload if it was allocated
-        if (event.payload) {
-            free(event.payload);
-        }
+        // Free event payload using the type-aware free function
+        event_payload_free(event.type, event.payload);
     }
     
     cortex_change_state(cortex, TK_STATE_SHUTDOWN);
@@ -887,10 +966,28 @@ static tk_error_code_t cortex_handle_event(tk_cortex_t* cortex, const tk_cortex_
             return TK_SUCCESS;
         }
             
-        case CORTEX_EVENT_SYSTEM_TIMER:
-            // This could be used for periodic tasks or fallback processing
-            // For now, we'll just run LLM inference periodically as a fallback
+        case CORTEX_EVENT_SYSTEM_TIMER: {
+            // This is our main periodic tick.
+            // First, process any pending actions from the previous cycle.
+            tk_context_summary_t context_summary;
+            tk_error_code_t res = tk_contextual_reasoner_get_context_summary(cortex->contextual_reasoner, &context_summary);
+            if (res != TK_SUCCESS) {
+                tk_log_warning("Failed to get context summary for action processing: %d", res);
+                // Continue anyway, some actions might not need context.
+            }
+
+            tk_decision_engine_process_actions(
+                cortex->decision_engine,
+                event->timestamp_ns,
+                (res == TK_SUCCESS) ? &context_summary : NULL,
+                cortex->audio_pipeline,
+                cortex->navigation_engine,
+                cortex->contextual_reasoner
+            );
+
+            // Then, run LLM inference as a fallback.
             return cortex_run_llm_inference(cortex);
+        }
             
         case CORTEX_EVENT_SHUTDOWN:
             cortex->should_stop = true;
@@ -903,23 +1000,41 @@ static tk_error_code_t cortex_handle_event(tk_cortex_t* cortex, const tk_cortex_
 }
 
 static tk_error_code_t cortex_process_vision_input(tk_cortex_t* cortex) {
+    tk_video_frame_t frame_copy = {0};
+    uint8_t* frame_data_copy = NULL;
+    bool has_frame_to_process = false;
+
     pthread_mutex_lock(&cortex->video_buffer.mutex);
     
-    if (!cortex->video_buffer.has_new_frame || cortex->video_buffer.frame_count == 0) {
-        pthread_mutex_unlock(&cortex->video_buffer.mutex);
-        return TK_SUCCESS;
+    if (cortex->video_buffer.has_new_frame && cortex->video_buffer.frame_count > 0) {
+        // Get the latest frame from the ring buffer
+        size_t read_idx = (cortex->video_buffer.write_index - 1 + cortex->video_buffer.frame_capacity) % cortex->video_buffer.frame_capacity;
+        tk_video_frame_t* original_frame = &cortex->video_buffer.frames[read_idx];
+
+        // Perform a deep copy of the frame data while under the lock
+        size_t data_size = original_frame->stride * original_frame->height;
+        frame_data_copy = malloc(data_size);
+        if (frame_data_copy) {
+            memcpy(frame_data_copy, original_frame->data, data_size);
+            frame_copy = *original_frame;
+            frame_copy.data = frame_data_copy;
+            has_frame_to_process = true;
+        } else {
+            tk_log_error("Failed to allocate memory for frame copy in vision processing.");
+        }
+        
+        cortex->video_buffer.has_new_frame = false;
     }
     
-    // Get the latest frame
-    size_t read_idx = (cortex->video_buffer.write_index - 1 + cortex->video_buffer.frame_capacity) % cortex->video_buffer.frame_capacity;
-    tk_video_frame_t* frame = &cortex->video_buffer.frames[read_idx];
-    
-    cortex->video_buffer.has_new_frame = false;
     pthread_mutex_unlock(&cortex->video_buffer.mutex);
+
+    if (!has_frame_to_process) {
+        return TK_SUCCESS; // Nothing to do
+    }
     
     uint64_t start_time = get_current_time_ns();
     
-    // Process the frame through vision pipeline
+    // Process the frame through vision pipeline using our safe local copy
     cortex_change_state(cortex, TK_STATE_PROCESSING);
     
     tk_vision_result_t* vision_result = NULL;
@@ -927,7 +1042,7 @@ static tk_error_code_t cortex_process_vision_input(tk_cortex_t* cortex) {
     
     tk_error_code_t result = tk_vision_pipeline_process_frame(
         cortex->vision_pipeline,
-        frame,
+        &frame_copy,
         analysis_flags,
         start_time,
         &vision_result
@@ -965,23 +1080,18 @@ static tk_error_code_t cortex_process_vision_input(tk_cortex_t* cortex) {
     
     // If it's a significant change, enqueue an event to process it
     if (is_significant_change) {
-        // Create a copy of the vision result for the event payload
-        tk_vision_result_t* payload_copy = malloc(sizeof(tk_vision_result_t));
-        if (payload_copy) {
-            // This is a shallow copy - in a real implementation, you'd need a deep copy
-            // or a reference-counted approach to manage the lifetime of the vision result
-            *payload_copy = *vision_result;
-            
-            tk_cortex_event_t significant_change_event = {
-                .type = CORTEX_EVENT_SIGNIFICANT_VISION_CHANGE,
-                .payload = payload_copy,
-                .timestamp_ns = get_current_time_ns()
-            };
-            event_queue_enqueue(&cortex->event_queue, &significant_change_event);
-        } else {
-            tk_log_error("Failed to allocate memory for vision result copy");
-        }
+        // Pass the original vision_result pointer. The event queue's deep copy
+        // mechanism will handle creating a safe copy for the event.
+        tk_cortex_event_t significant_change_event = {
+            .type = CORTEX_EVENT_SIGNIFICANT_VISION_CHANGE,
+            .payload = vision_result,
+            .timestamp_ns = get_current_time_ns()
+        };
+        event_queue_enqueue(&cortex->event_queue, &significant_change_event);
     }
+
+    // Clean up the local frame copy
+    free(frame_data_copy);
     
     return TK_SUCCESS;
 }
@@ -1180,6 +1290,184 @@ static void cortex_change_state(tk_cortex_t* cortex, tk_system_state_e new_state
 }
 
 //------------------------------------------------------------------------------
+// Payload Management Implementation
+//------------------------------------------------------------------------------
+
+/**
+ * @brief Creates a deep copy of a tk_transcription_t struct.
+ */
+static tk_error_code_t deep_copy_transcription(tk_transcription_t** dest, const tk_transcription_t* src) {
+    if (!dest || !src) return TK_ERROR_INVALID_ARGUMENT;
+
+    *dest = calloc(1, sizeof(tk_transcription_t));
+    if (!*dest) return TK_ERROR_OUT_OF_MEMORY;
+
+    (*dest)->is_final = src->is_final;
+    (*dest)->confidence = src->confidence;
+
+    if (src->text) {
+        (*dest)->text = strdup(src->text);
+        if (!(*dest)->text) {
+            free(*dest);
+            *dest = NULL;
+            return TK_ERROR_OUT_OF_MEMORY;
+        }
+    } else {
+        (*dest)->text = NULL;
+    }
+
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Creates a deep copy of a tk_vision_result_t struct.
+ * This is complex due to multiple levels of pointers.
+ */
+static tk_error_code_t deep_copy_vision_result(tk_vision_result_t** dest, const tk_vision_result_t* src) {
+    if (!dest || !src) return TK_ERROR_INVALID_ARGUMENT;
+
+    *dest = calloc(1, sizeof(tk_vision_result_t));
+    if (!*dest) return TK_ERROR_OUT_OF_MEMORY;
+
+    // Copy scalar fields
+    (*dest)->source_frame_timestamp_ns = src->source_frame_timestamp_ns;
+    (*dest)->object_count = 0;
+    (*dest)->text_block_count = 0;
+    (*dest)->objects = NULL;
+    (*dest)->text_blocks = NULL;
+    (*dest)->depth_map = NULL;
+
+    // Copy objects
+    if (src->object_count > 0 && src->objects) {
+        (*dest)->objects = calloc(src->object_count, sizeof(tk_vision_object_t));
+        if (!(*dest)->objects) {
+            tk_vision_result_destroy(dest); // Safely cleans up partial allocation
+            return TK_ERROR_OUT_OF_MEMORY;
+        }
+        (*dest)->object_count = src->object_count;
+        for (size_t i = 0; i < src->object_count; ++i) {
+            (*dest)->objects[i] = src->objects[i]; // shallow copy of struct
+            if (src->objects[i].label) {
+                // The label in tk_vision_object_t is `const char*` and points to a static
+                // label map, so we don't need to strdup it.
+                (*dest)->objects[i].label = src->objects[i].label;
+            }
+        }
+    }
+
+    // Copy text blocks
+    if (src->text_block_count > 0 && src->text_blocks) {
+        (*dest)->text_blocks = calloc(src->text_block_count, sizeof(tk_vision_text_block_t));
+        if (!(*dest)->text_blocks) {
+            tk_vision_result_destroy(dest);
+            return TK_ERROR_OUT_OF_MEMORY;
+        }
+        (*dest)->text_block_count = src->text_block_count;
+        for (size_t i = 0; i < src->text_block_count; ++i) {
+            (*dest)->text_blocks[i] = src->text_blocks[i]; // shallow copy
+            if (src->text_blocks[i].text) {
+                (*dest)->text_blocks[i].text = strdup(src->text_blocks[i].text);
+                if (!(*dest)->text_blocks[i].text) {
+                    tk_vision_result_destroy(dest);
+                    return TK_ERROR_OUT_OF_MEMORY;
+                }
+            }
+        }
+    }
+
+    // Copy depth map
+    if (src->depth_map) {
+        (*dest)->depth_map = calloc(1, sizeof(tk_vision_depth_map_t));
+        if (!(*dest)->depth_map) {
+            tk_vision_result_destroy(dest);
+            return TK_ERROR_OUT_OF_MEMORY;
+        }
+        (*dest)->depth_map->width = src->depth_map->width;
+        (*dest)->depth_map->height = src->depth_map->height;
+        size_t data_size = src->depth_map->width * src->depth_map->height * sizeof(float);
+        if (data_size > 0) {
+            (*dest)->depth_map->data = malloc(data_size);
+            if (!(*dest)->depth_map->data) {
+                tk_vision_result_destroy(dest);
+                return TK_ERROR_OUT_OF_MEMORY;
+            }
+            memcpy((*dest)->depth_map->data, src->depth_map->data, data_size);
+        } else {
+            (*dest)->depth_map->data = NULL;
+        }
+    }
+
+    return TK_SUCCESS;
+}
+
+
+/**
+ * @brief Copies an event payload based on its type.
+ */
+static tk_error_code_t event_payload_copy(tk_cortex_event_type_e type, void** dest_payload, const void* src_payload) {
+    if (!dest_payload || !src_payload) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+
+    *dest_payload = NULL;
+    tk_error_code_t result = TK_SUCCESS;
+
+    switch (type) {
+        case CORTEX_EVENT_USER_SPEECH_FINAL:
+            result = deep_copy_transcription((tk_transcription_t**)dest_payload, (const tk_transcription_t*)src_payload);
+            break;
+
+        case CORTEX_EVENT_SIGNIFICANT_VISION_CHANGE:
+            result = deep_copy_vision_result((tk_vision_result_t**)dest_payload, (const tk_vision_result_t*)src_payload);
+            break;
+
+        // Events with no payload or simple payloads that don't need deep copy
+        case CORTEX_EVENT_NEW_VIDEO_FRAME:
+        case CORTEX_EVENT_VAD_SPEECH_STARTED:
+        case CORTEX_EVENT_SYSTEM_TIMER:
+        case CORTEX_EVENT_SHUTDOWN:
+        default:
+            // No payload to copy or shallow copy is sufficient (and was already done).
+            // This function is for deep copies, so we do nothing.
+            break;
+    }
+
+    return result;
+}
+
+/**
+ * @brief Frees an event payload based on its type.
+ */
+static void event_payload_free(tk_cortex_event_type_e type, void* payload) {
+    if (!payload) {
+        return;
+    }
+
+    switch (type) {
+        case CORTEX_EVENT_USER_SPEECH_FINAL: {
+            tk_transcription_t* transcription = (tk_transcription_t*)payload;
+            // The const_cast is safe here because we are the owner of this memory.
+            free((void*)transcription->text);
+            free(transcription);
+            break;
+        }
+        case CORTEX_EVENT_SIGNIFICANT_VISION_CHANGE:
+            // Use the provided library function to free the complex vision result
+            tk_vision_result_destroy((tk_vision_result_t**)&payload);
+            break;
+
+        default:
+            // For simple payloads that were just malloc'd, a single free is enough.
+            // However, our current logic doesn't have any of those.
+            // If we had a simple payload, we'd free it here.
+            // For now, we only handle the complex types we've deep-copied.
+            // free(payload); // This would be for a simple malloc'd payload
+            break;
+    }
+}
+
+
+//------------------------------------------------------------------------------
 // Audio Pipeline Callbacks
 //------------------------------------------------------------------------------
 
@@ -1220,25 +1508,15 @@ static void on_transcription(const tk_transcription_t* result, void* user_data) 
     
     // Only enqueue an event for final transcriptions
     if (result->is_final) {
-        // Create a copy of the transcription for the event payload
-        tk_transcription_t* payload_copy = malloc(sizeof(tk_transcription_t));
-        if (payload_copy) {
-            // This is a shallow copy - in a real implementation, you'd need to copy the text as well
-            // For simplicity, we're assuming the text pointer is valid for the lifetime of the event
-            // A more robust solution would strdup the text
-            *payload_copy = *result;
-            // Note: This is a potential issue if the original text pointer becomes invalid
-            // A better approach would be to strdup the text and manage its lifetime
-            
-            tk_cortex_event_t transcription_event = {
-                .type = CORTEX_EVENT_USER_SPEECH_FINAL,
-                .payload = payload_copy,
-                .timestamp_ns = get_current_time_ns()
-            };
-            event_queue_enqueue(&cortex->event_queue, &transcription_event);
-        } else {
-            tk_log_error("Failed to allocate memory for transcription copy");
-        }
+        // The original `result` pointer is passed directly. `event_queue_enqueue`
+        // is now responsible for creating a deep copy, so we don't need to
+        // manually allocate or copy anything here.
+        tk_cortex_event_t transcription_event = {
+            .type = CORTEX_EVENT_USER_SPEECH_FINAL,
+            .payload = (void*)result, // Pass the original pointer
+            .timestamp_ns = get_current_time_ns()
+        };
+        event_queue_enqueue(&cortex->event_queue, &transcription_event);
     }
 }
 

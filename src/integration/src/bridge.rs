@@ -44,14 +44,27 @@ pub enum BridgeError {
     PluginExecutionFailed(String),
 }
 
+/// A strongly-typed payload for the "do_something" action.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DoSomethingPayload {
+    pub item_id: u32,
+    pub new_state: String,
+    pub force: bool,
+}
+
 /// Represents a request sent from the core application to a plugin.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "payload")] // Use serde's tagging for cleaner JSON
 pub enum BridgeRequest {
     /// A request to get basic information about the plugin.
     GetPluginInfo,
+    
+    /// A request to perform the "do_something" action with a typed payload.
+    PerformDoSomething(DoSomethingPayload),
+
     /// A request to perform a specific action, with a generic payload.
-    /// The payload is a JSON value to allow for flexibility.
-    PerformAction {
+    /// This is kept for flexibility with less critical or more dynamic actions.
+    PerformGenericAction {
         /// The name of the action to perform.
         action_name: String,
         /// The JSON-encoded payload for the action.
@@ -128,16 +141,22 @@ impl IntegrationBridge {
                 version: "1.0.0-mock".to_string(),
                 author: "Mock Author".to_string(),
             }),
-            BridgeRequest::PerformAction { action_name, .. } => {
-                if action_name == "do_something" {
-                    Ok(BridgeResponse::ActionSuccess {
-                        result: serde_json::json!({ "status": "completed" }),
-                    })
-                } else {
-                    Ok(BridgeResponse::ActionError {
-                        error_message: format!("Action '{}' not recognized.", action_name),
-                    })
-                }
+            BridgeRequest::PerformDoSomething(payload) => {
+                log::info!("Performing 'DoSomething' with typed payload: {:?}", payload);
+                // In a real plugin, you'd use the payload fields here.
+                Ok(BridgeResponse::ActionSuccess {
+                    result: serde_json::json!({
+                        "status": "completed",
+                        "item_id": payload.item_id,
+                        "final_state": payload.new_state
+                    }),
+                })
+            }
+            BridgeRequest::PerformGenericAction { action_name, .. } => {
+                log::warn!("Handling generic action: {}", action_name);
+                Ok(BridgeResponse::ActionError {
+                    error_message: format!("Generic action '{}' not recognized.", action_name),
+                })
             }
         }
     }

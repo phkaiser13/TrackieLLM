@@ -25,8 +25,11 @@
  */
 
 use super::{ffi, CortexError};
+use std::ffi::{CStr, CString};
+use std::os::raw::c_char;
 use std::ptr::null_mut;
 use thiserror::Error;
+use libc;
 
 /// Represents errors specific to the contextual reasoner.
 #[derive(Debug, Error)]
@@ -35,105 +38,118 @@ pub enum ReasoningError {
     #[error("Reasoner context is not initialized.")]
     NotInitialized,
 
-    /// An FFI call failed.
+    /// An FFI call failed, with a message from the C side.
     #[error("Reasoner FFI call failed: {0}")]
     Ffi(String),
+
+    /// A string passed to an FFI function contained an unexpected null byte.
+    #[error("FFI string conversion failed: {0}")]
+    NulError(#[from] std::ffi::NulError),
+
+    /// A string returned from an FFI function was not valid UTF-8.
+    #[error("FFI string decoding failed: {0}")]
+    Utf8Error(#[from] std::str::Utf8Error),
 }
 
 /// A low-level RAII wrapper for the `tk_contextual_reasoner_t` handle.
+/// In a real implementation, this would be managed by the `Cortex` struct.
 struct ReasonerContext {
     ptr: *mut ffi::tk_contextual_reasoner_t,
 }
 
-impl ReasonerContext {
-    /// Creates a new `ReasonerContext`.
-    /// This is a placeholder for the actual creation logic which would
-    /// likely be part of the main Cortex initialization.
-    #[allow(dead_code)]
-    fn new() -> Result<Self, ReasoningError> {
-        let mut ptr = null_mut();
-        // In a real scenario, we'd call `tk_contextual_reasoner_create` here.
-        // For this mock, we assume the pointer is created and managed by the
-        // main `tk_cortex_t` object.
-        if ptr.is_null() {
-            // This is just a placeholder path
-            // return Err(ReasoningError::NotInitialized);
-        }
-        Ok(Self { ptr })
-    }
-}
-
 impl Drop for ReasonerContext {
-    /// Ensures the C context is always destroyed.
     fn drop(&mut self) {
         if !self.ptr.is_null() {
-            // In a real implementation, the `tk_cortex_t` would own this,
-            // so we might not call the destroy function directly from here
-            // to avoid a double-free. This depends on the ownership model.
-            // For a standalone reasoner, this would be correct:
-            // unsafe { ffi::tk_contextual_reasoner_destroy(&mut self.ptr) };
+            // The Cortex owns the reasoner, so it's responsible for destroying it.
+            // This Drop impl is just for correctness in case this struct is ever
+            // used in a standalone way.
         }
     }
 }
 
 /// A safe, high-level interface to the Contextual Reasoning Engine.
 pub struct ContextualReasoner {
-    /// The handle to the underlying C context.
-    /// This would be initialized by the main `Cortex` service.
-    #[allow(dead_code)]
-    context: ReasonerContext,
+    // This is not the owner of the pointer. The C-level `tk_cortex_t` is.
+    // We just hold a raw pointer to it.
+    ptr: *mut ffi::tk_contextual_reasoner_t,
 }
 
 impl ContextualReasoner {
-    /// Creates a new `ContextualReasoner`.
-    /// This is a simplified constructor for demonstration.
-    pub fn new() -> Self {
-        Self {
-            context: ReasonerContext { ptr: null_mut() }, // Placeholder
-        }
+    /// Creates a new `ContextualReasoner` wrapper.
+    /// This does not create the reasoner, it only wraps an existing one.
+    pub fn new(ptr: *mut ffi::tk_contextual_reasoner_t) -> Self {
+        Self { ptr }
     }
 
     /// Adds a new turn of conversation to the context.
-    ///
-    /// # Arguments
-    /// * `is_user_input` - True if the content is from the user, false if from the system.
-    /// * `content` - The text content of the conversation turn.
-    /// * `confidence` - The confidence score of the transcription or generation.
-    #[allow(dead_code)]
     pub fn add_conversation_turn(
         &mut self,
-        _is_user_input: bool,
-        _content: &str,
-        _confidence: f32,
+        is_user_input: bool,
+        content: &str,
+        confidence: f32,
     ) -> Result<(), ReasoningError> {
-        // Mock Implementation:
-        // 1. Convert `content` to a CString.
-        // 2. Get the raw pointer from `self.context.ptr`.
-        // 3. Make the unsafe FFI call:
-        //    `ffi::tk_contextual_reasoner_add_conversation_turn(...)`
-        // 4. Check the return code and convert it to a Result.
-        log::debug!("Simulating adding conversation turn: '{}'", _content);
-        Ok(())
+        if self.ptr.is_null() {
+            return Err(ReasoningError::NotInitialized);
+        }
+
+        let c_content = CString::new(content)?;
+
+        let status = unsafe {
+            ffi::tk_contextual_reasoner_add_conversation_turn(
+                self.ptr,
+                is_user_input,
+                c_content.as_ptr(),
+                confidence,
+            )
+        };
+
+        if status != ffi::tk_error_code_t_TK_SUCCESS {
+            let error_msg = ffi::get_last_error_message();
+            Err(ReasoningError::Ffi(error_msg))
+        } else {
+            Ok(())
+        }
     }
 
     /// Generates a textual summary of the current context for the LLM.
-    ///
-    /// This function calls the C API to process the current context state
-    /// and produce a string that can be injected into the LLM's prompt.
-    #[allow(dead_code)]
     pub fn generate_context_string(
         &self,
-        _max_token_budget: usize,
+        max_token_budget: usize,
     ) -> Result<String, ReasoningError> {
-        // Mock Implementation:
-        // 1. Get the raw pointer from `self.context.ptr`.
-        // 2. Call `ffi::tk_contextual_reasoner_generate_context_string`.
-        // 3. Check the return code.
-        // 4. Take ownership of the returned `char**`, convert it to a Rust `String`.
-        // 5. Free the C string using the appropriate memory management function.
-        log::info!("Generating context summary string...");
-        let mock_summary = "The user is in the kitchen. A cup is visible on the counter. The user just asked: 'What can you see?'".to_string();
-        Ok(mock_summary)
+        if self.ptr.is_null() {
+            return Err(ReasoningError::NotInitialized);
+        }
+
+        let mut c_string_ptr: *mut c_char = null_mut();
+
+        let status = unsafe {
+            ffi::tk_contextual_reasoner_generate_context_string(
+                self.ptr,
+                &mut c_string_ptr,
+                max_token_budget,
+            )
+        };
+
+        if status != ffi::tk_error_code_t_TK_SUCCESS {
+            return Err(ReasoningError::Ffi(ffi::get_last_error_message()));
+        }
+
+        if c_string_ptr.is_null() {
+            // C function succeeded but returned a null pointer, which is unexpected.
+            // Treat this as an empty string.
+            return Ok(String::new());
+        }
+
+        // Unsafe block to convert C string to Rust String and then free it.
+        let result = unsafe {
+            let rust_string = CStr::from_ptr(c_string_ptr).to_str()?.to_owned();
+            // We must free the string that was allocated by the C side.
+            // Assuming it was allocated with malloc/calloc/strdup.
+            libc::free(c_string_ptr as *mut libc::c_void);
+            Ok(rust_string)
+        };
+
+        result
     }
 }
 

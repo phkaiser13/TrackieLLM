@@ -59,44 +59,8 @@
 
 // --- FFI Bindings Module ---
 // This module contains the raw FFI declarations for the entire Cortex C API.
-mod ffi {
-    #![allow(non_camel_case_types, non_snake_case, dead_code)]
-    // This would be extremely large, containing all definitions from the
-    // three cortex-related C headers. For brevity, only a few key items
-    // are included here as placeholders for the real generated bindings.
-    pub type tk_error_code_t = i32;
-    pub const TK_SUCCESS: tk_error_code_t = 0;
-
-    pub enum tk_cortex_s {}
-    pub type tk_cortex_t = tk_cortex_s;
-
-    pub enum tk_contextual_reasoner_s {}
-    pub type tk_contextual_reasoner_t = tk_contextual_reasoner_s;
-    
-    pub enum tk_decision_engine_s {}
-    pub type tk_decision_engine_t = tk_decision_engine_s;
-
-    #[repr(C)]
-    pub struct tk_cortex_config_t {
-        // ... fields
-    }
-    
-    #[repr(C)]
-    pub struct tk_cortex_callbacks_t {
-        // ... fields
-    }
-
-    extern "C" {
-        pub fn tk_cortex_create(
-            out_cortex: *mut *mut tk_cortex_t,
-            config: *const tk_cortex_config_t,
-            callbacks: tk_cortex_callbacks_t,
-        ) -> tk_error_code_t;
-        pub fn tk_cortex_destroy(cortex: *mut *mut tk_cortex_t);
-        pub fn tk_cortex_run(cortex: *mut tk_cortex_t) -> tk_error_code_t;
-        pub fn tk_cortex_stop(cortex: *mut tk_cortex_t) -> tk_error_code_t;
-    }
-}
+// It is loaded from the `ffi.rs` file.
+mod ffi;
 
 
 // --- Public Module Declarations ---

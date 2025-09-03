@@ -146,7 +146,7 @@ add_subdirectory(src)
 
 # Add tests and benchmarks if enabled
 if(TK_BUILD_TESTS)
-    # add_subdirectory(tests)
+    add_subdirectory(tests)
     message(STATUS "Test builds are enabled.")
 endif()
 

@@ -57,15 +57,6 @@ Source code of application
         │   │       ├── lib.rs
         │   │       ├── event_formatter.rs
         │   │       └── audit_helpers.rs
-        │   ├── memory/
-        │   │   ├── tk_memory_pool.c
-        │   │   ├── tk_memory_pool.h
-        │   │   ├── tk_memory_tracker.c
-        │   │   ├── tk_memory_tracker.h
-        │   │   └── src/
-        │   │       ├── lib.rs
-        │   │       ├── allocator.rs
-        │   │       └── garbage_collector.rs
         │   ├── ai_models/
         │   │   ├── tk_model_loader.c
         │   │   ├── tk_model_loader.h

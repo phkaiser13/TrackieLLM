@@ -339,7 +339,11 @@ TK_NODISCARD tk_error_code_t tk_decision_engine_cancel_action(
  */
 TK_NODISCARD tk_error_code_t tk_decision_engine_process_actions(
     tk_decision_engine_t* engine,
-    uint64_t current_time_ns
+    uint64_t current_time_ns,
+    const tk_context_summary_t* context,
+    void* audio_ctx,
+    void* nav_ctx,
+    void* reasoner_ctx
 );
 
 //------------------------------------------------------------------------------
