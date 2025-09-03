@@ -1,0 +1,39 @@
+name: CI - Metal Backend
+
+on:
+  workflow_dispatch: # Manual trigger
+  pull_request:
+    paths:
+      - 'src/gpu/**'
+      - 'src/ai_models/**'
+      - '.github/workflows/ci-metal.yml'
+
+jobs:
+  build-metal:
+    name: Build and Test with Metal
+    runs-on: macos-14 # Using a modern macOS runner for better Metal support
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Set up Homebrew dependencies
+      run: |
+        brew install cmake ninja
+
+    - name: Configure CMake for Metal
+      # These flags are examples. The actual flags will depend on the project's CMakeLists.txt
+      run: |
+        cmake -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DTRACKIE_ENABLE_METAL=ON
+
+    - name: Build with CMake
+      run: cmake --build build
+
+    - name: Run Metal-specific tests
+      working-directory: ./build
+      run: ctest -C Release --output-on-failure -L METAL # Assumes tests are labeled 'METAL'

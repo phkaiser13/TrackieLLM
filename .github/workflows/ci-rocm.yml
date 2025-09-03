@@ -1,0 +1,49 @@
+name: CI - ROCm Backend
+
+on:
+  workflow_dispatch: # Manual trigger
+  pull_request:
+    paths:
+      - 'src/gpu/**'
+      - 'src/ai_models/**'
+      - '.github/workflows/ci-rocm.yml'
+
+jobs:
+  build-rocm:
+    name: Build and Test with ROCm
+    runs-on: [self-hosted, linux, x64, rocm]
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Verify ROCm installation
+      run: |
+        echo "Checking for rocminfo..."
+        which rocminfo
+        rocminfo
+        echo "Checking for hipcc..."
+        which hipcc
+        hipcc --version
+
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Set up C/C++ build environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake ninja-build
+
+    - name: Configure CMake for ROCm
+      # These flags are examples. The actual flags will depend on the project's CMakeLists.txt
+      run: |
+        cmake -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DTRACKIE_ENABLE_ROCM=ON
+
+    - name: Build with CMake
+      run: cmake --build build
+
+    - name: Run ROCm-specific tests
+      working-directory: ./build
+      run: ctest -C Release --output-on-failure -L ROCM # Assumes tests are labeled 'ROCM'

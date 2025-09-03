@@ -1,0 +1,36 @@
+# Dockerfile for TrackieLLM Development Environment
+
+FROM ubuntu:22.04
+
+# Set non-interactive frontend to avoid prompts during installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install common development tools and project dependencies
+RUN apt-get update && apt-get install -y \
+    # Core build tools
+    build-essential \
+    cmake \
+    ninja-build \
+    git \
+    # Common utilities
+    curl \
+    vim \
+    gdb \
+    # Project-specific dependencies (add as needed)
+    libssl-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Set up a working directory
+WORKDIR /app
+
+# The idea for this container is to be used with a volume mount.
+# Example usage:
+# docker run -it --rm -v $(pwd):/app trackie-dev:latest bash
+#
+# This will drop the developer into a shell inside the container
+# with all tools installed and the source code available at /app.
+CMD ["/bin/bash"]

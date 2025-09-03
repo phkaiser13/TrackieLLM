@@ -1,0 +1,50 @@
+name: CI - CUDA Backend
+
+on:
+  workflow_dispatch: # Manual trigger
+  pull_request:
+    paths:
+      - 'src/gpu/**'
+      - 'src/ai_models/**'
+      - '.github/workflows/ci-cuda.yml'
+
+jobs:
+  build-cuda:
+    name: Build and Test with CUDA
+    runs-on: [self-hosted, linux, x64, cuda]
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Verify CUDA installation
+      run: |
+        echo "Checking for nvidia-smi..."
+        which nvidia-smi
+        nvidia-smi
+        echo "Checking for nvcc..."
+        which nvcc
+        nvcc --version
+
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Set up C/C++ build environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake ninja-build
+
+    - name: Configure CMake for CUDA
+      # These flags are examples. The actual flags will depend on the project's CMakeLists.txt
+      run: |
+        cmake -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DTRACKIE_ENABLE_CUDA=ON \
+          -DCMAKE_CUDA_ARCHITECTURES=75 # Example for Tesla T4
+
+    - name: Build with CMake
+      run: cmake --build build
+
+    - name: Run CUDA-specific tests
+      working-directory: ./build
+      run: ctest -C Release --output-on-failure -L CUDA # Assumes tests are labeled 'CUDA'
