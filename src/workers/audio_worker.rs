@@ -29,7 +29,7 @@ use std::ffi::{c_void, CStr, CString};
 use std::ptr;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::mpsc::{self, Sender};
+use tokio::sync::{mpsc::{self, Sender}, watch};
 use tokio::time::sleep;
 
 // --- FFI Callback Bridge ---
@@ -173,13 +173,25 @@ pub async fn run(event_bus: Arc<EventBus>) {
     // Create a subscriber to listen for TTS commands.
     let mut tts_subscriber = event_bus.subscribe();
 
+    // Create a watch channel for shutting down the mock microphone task.
+    let (shutdown_tx, mut shutdown_rx) = watch::channel(());
+
     // Spawn a separate task to simulate feeding the microphone data.
     let pipeline_clone = pipeline.clone();
-    tokio::spawn(async move {
+    let mic_handle = tokio::spawn(async move {
         let mock_chunk = vec![0i16; 1600]; // 100ms of audio at 16kHz
         loop {
-            unsafe { pipeline_clone.process_chunk(&mock_chunk) };
-            sleep(Duration::from_millis(100)).await;
+            tokio::select! {
+                // Branch 1: Wait for the next tick to send audio data.
+                _ = sleep(Duration::from_millis(100)) => {
+                    unsafe { pipeline_clone.process_chunk(&mock_chunk) };
+                }
+                // Branch 2: Listen for the shutdown signal from the main worker.
+                _ = shutdown_rx.changed() => {
+                    println!("[Audio Worker] Microphone task shutting down.");
+                    break;
+                }
+            }
         }
     });
 
@@ -187,11 +199,23 @@ pub async fn run(event_bus: Arc<EventBus>) {
     // Main worker loop.
     loop {
         tokio::select! {
-            // 1. Listen for TTS commands from the event bus.
+            // 1. Listen for events from the main event bus.
             Ok(event) = tts_subscriber.next_event() => {
-                if let TrackieEvent::Speak(text) = event {
-                    println!("[Audio Worker] Received command to speak: '{}'", &text);
-                    unsafe { pipeline.synthesize_text(&text) };
+                match event {
+                    TrackieEvent::Speak(text) => {
+                        println!("[Audio Worker] Received command to speak: '{}'", &text);
+                        unsafe { pipeline.synthesize_text(&text) };
+                    }
+                    TrackieEvent::Shutdown => {
+                        println!("[Audio Worker] Shutdown signal received. Terminating.");
+                        // Signal the microphone task to shut down.
+                        let _ = shutdown_tx.send(());
+                        // Wait for the microphone task to finish.
+                        let _ = mic_handle.await;
+                        break; // Exit the main loop
+                    }
+                    // Ignore other events like VisionResult, etc.
+                    _ => {}
                 }
             },
             // 2. Listen for VAD events from the C callback.

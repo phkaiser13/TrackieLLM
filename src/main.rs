@@ -30,7 +30,7 @@ use tokio;
 
 use async_tasks::prelude::*;
 use cortex::memory_manager::MemoryManager;
-use event_bus::EventBus;
+use event_bus::{EventBus, TrackieEvent};
 
 /// The main function initializes and runs the TrackieLLM application.
 #[tokio::main]
@@ -74,13 +74,45 @@ async fn main() {
 
     // --- 3. Await and Manage Shutdown ---
 
-    // We wait for all tasks to complete. In this design, the workers loop
-    // forever, so this `join!` will only complete if a task panics.
-    // A more robust shutdown mechanism would involve sending a signal
-    // (e.g., via the event bus) to all workers to terminate gracefully.
-    if let Err(e) = tokio::try_join!(vision_handle, audio_handle, cortex_handle) {
-        eprintln!("[Orchestrator] A worker task failed: {}", e);
+    // --- 3. Wait for Shutdown Signal ---
+
+    // The application will run indefinitely until a `Ctrl-C` signal is received.
+    if let Err(e) = tokio::signal::ctrl_c().await {
+        eprintln!("[Orchestrator] Failed to listen for shutdown signal: {}", e);
+        // If we can't listen, we can't gracefully shut down.
+        // We'll proceed to a hard shutdown by dropping the handles.
+    } else {
+        println!("\n[Orchestrator] Shutdown signal received. Broadcasting to all workers...");
+        // Publish the shutdown event to notify all workers.
+        event_bus.publish(TrackieEvent::Shutdown);
     }
 
-    println!("[Orchestrator] Shutting down.");
+    // --- 4. Await Graceful Worker Termination ---
+    println!("[Orchestrator] Waiting for workers to terminate...");
+
+    // We await all handles to ensure they have completed their cleanup.
+    // A timeout is added as a safeguard against a worker that fails to
+    // terminate.
+    let shutdown_timeout = tokio::time::Duration::from_secs(10);
+    if tokio::time::timeout(shutdown_timeout, async {
+        let (vision_res, audio_res, cortex_res) =
+            tokio::join!(vision_handle, audio_handle, cortex_handle);
+        // Check if any worker panicked.
+        if let Err(e) = vision_res {
+            eprintln!("[Orchestrator] Vision worker panicked: {:?}", e);
+        }
+        if let Err(e) = audio_res {
+            eprintln!("[Orchestrator] Audio worker panicked: {:?}", e);
+        }
+        if let Err(e) = cortex_res {
+            eprintln!("[Orchestrator] Cortex worker panicked: {:?}", e);
+        }
+    })
+    .await
+    .is_err()
+    {
+        eprintln!("[Orchestrator] Timeout waiting for workers to shut down. Forcing exit.");
+    }
+
+    println!("[Orchestrator] All workers have terminated. Shutting down.");
 }

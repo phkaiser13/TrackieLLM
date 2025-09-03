@@ -70,6 +70,8 @@ pub enum TrackieEvent {
     VADEvent(bool),
     /// Published by the cortex to command the audio worker to speak.
     Speak(String),
+    /// Published by the main orchestrator to signal all workers to shut down gracefully.
+    Shutdown,
 }
 
 // --- Event Bus Implementation ---

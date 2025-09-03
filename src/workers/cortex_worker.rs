@@ -114,6 +114,11 @@ pub async fn run(event_bus: Arc<EventBus>, memory_manager: Arc<Mutex<MemoryManag
             }
             // The cortex publishes `Speak` events but does not act on them.
             Ok(TrackieEvent::Speak(_)) => {}
+            // Graceful shutdown command.
+            Ok(TrackieEvent::Shutdown) => {
+                println!("[Cortex Worker] Shutdown signal received. Terminating.");
+                break; // Exit the loop.
+            }
             Err(e) => {
                 eprintln!("[Cortex Worker] Event bus error, subscriber lagging: {}", e);
                 // A brief pause can help if the system is overloaded.

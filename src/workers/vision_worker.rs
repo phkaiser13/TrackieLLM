@@ -125,46 +125,58 @@ pub async fn run(event_bus: Arc<EventBus>) {
         }
     };
 
+    let mut subscriber = event_bus.subscribe();
+    println!("[Vision Worker] Now listening for events.");
+
     // Main processing loop
     loop {
-        // Simulate a 10 FPS camera.
-        sleep(Duration::from_millis(100)).await;
+        tokio::select! {
+            // Branch 1: Wait for the next processing tick.
+            _ = sleep(Duration::from_millis(100)) => {
+                let result_ptr = unsafe { pipeline.process_frame() };
 
-        let result_ptr = unsafe { pipeline.process_frame() };
+                if result_ptr.is_null() {
+                    // The C function might return null on error.
+                    continue;
+                }
 
-        if result_ptr.is_null() {
-            // The C function might return null on error.
-            continue;
-        }
-        
-        // Unpack the C result into a safe Rust struct.
-        // This is highly unsafe and requires careful handling of pointers.
-        let vision_data = unsafe {
-            let c_result = &*(result_ptr as *const ffi::tk_vision_result_fields);
-            
-            let mut objects = Vec::new();
-            if c_result.object_count > 0 && !c_result.objects.is_null() {
-                let c_objects = std::slice::from_raw_parts(c_result.objects, c_result.object_count);
-                for c_obj in c_objects {
-                    objects.push(DetectedObject {
-                        label: CStr::from_ptr(c_obj.label).to_string_lossy().into_owned(),
-                        confidence: c_obj.confidence,
-                        distance: c_obj.distance_meters,
-                    });
+                // Unpack the C result into a safe Rust struct.
+                // This is highly unsafe and requires careful handling of pointers.
+                let vision_data = unsafe {
+                    let c_result = &*(result_ptr as *const ffi::tk_vision_result_fields);
+
+                    let mut objects = Vec::new();
+                    if c_result.object_count > 0 && !c_result.objects.is_null() {
+                        let c_objects = std::slice::from_raw_parts(c_result.objects, c_result.object_count);
+                        for c_obj in c_objects {
+                            objects.push(DetectedObject {
+                                label: CStr::from_ptr(c_obj.label).to_string_lossy().into_owned(),
+                                confidence: c_obj.confidence,
+                                distance: c_obj.distance_meters,
+                            });
+                        }
+                    }
+
+                    VisionData {
+                        objects,
+                        timestamp_ns: c_result.source_frame_timestamp_ns,
+                    }
+                };
+
+                // Free the C-allocated result memory *after* we are done with it.
+                let mut result_ptr_mut = result_ptr;
+                unsafe { ffi::tk_vision_result_destroy(&mut result_ptr_mut) };
+
+                // Publish the safe Rust struct to the event bus.
+                event_bus.publish(TrackieEvent::VisionResult(Arc::new(vision_data)));
+            }
+            // Branch 2: Listen for a shutdown event from the bus.
+            Ok(event) = subscriber.next_event() => {
+                if let TrackieEvent::Shutdown = event {
+                    println!("[Vision Worker] Shutdown signal received. Terminating.");
+                    break; // Exit the loop
                 }
             }
-            
-            VisionData {
-                objects,
-                timestamp_ns: c_result.source_frame_timestamp_ns,
-            }
-        };
-
-        // Free the C-allocated result memory *after* we are done with it.
-        let mut result_ptr_mut = result_ptr;
-        unsafe { ffi::tk_vision_result_destroy(&mut result_ptr_mut) };
-
-        // Publish the safe Rust struct to the event bus.
-        event_bus.publish(TrackieEvent::VisionResult(Arc::new(vision_data)));
+        }
     }
 }
