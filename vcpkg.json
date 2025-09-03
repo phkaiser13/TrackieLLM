@@ -3,7 +3,7 @@
   "name": "trackiellm",
   "version-string": "1.0.0",
   "description": "vcpkg manifest for TrackieLLM C/C++ dependencies.",
-  "homepage": "https://github.com/phdev13/trackiellm",
+  "homepage": "https://github.com/phkaiser13/trackiellm",
   "license": "NONE",
   "dependencies": [
     {
@@ -12,42 +12,69 @@
       "features": []
     },
     {
-      "name": "libsodium",
-      "description": "Modern and easy-to-use crypto library for security features."
+      "name": "opencv",
+      "description": "Computer vision library for image preprocessing and analysis.",
+      "features": []
     },
     {
-      "name": "protobuf",
-      "description": "Protocol Buffers, often a dependency for ML model serialization and communication."
+      "name": "spdlog",
+      "description": "High-performance logging library for C++.",
+      "features": []
+    },
+    {
+      "name": "nlohmann-json",
+      "description": "JSON parser and serializer for C++ configurations.",
+      "features": []
+    },
+    {
+      "name": "gtest",
+      "description": "Google Test framework for writing and running unit tests.",
+      "features": []
+    },
+    {
+      "name": "cuda",
+      "description": "NVIDIA CUDA toolkit for GPU acceleration.",
+      "features": []
+    },
+    {
+      "name": "cudnn",
+      "description": "NVIDIA library for deep learning primitives on CUDA.",
+      "features": []
+    },
+    {
+      "name": "cublas",
+      "description": "Basic linear algebra subprograms (BLAS) library for NVIDIA GPUs.",
+      "features": []
+    },
+    {
+      "name": "rocm",
+      "description": "AMD open compute platform for GPU acceleration on Linux.",
+      "features": []
+    },
+    {
+      "name": "hip",
+      "description": "HIP SDK for portability of C++ applications to AMD/NVIDIA GPUs.",
+      "features": []
+    },
+    {
+      "name": "rocblas",
+      "description": "BLAS library for AMD GPUs, required by HIP applications.",
+      "features": []
+    },
+    {
+      "name": "rocrand",
+      "description": "Random number generation library for AMD GPUs.",
+      "features": []
     },
     {
       "name": "tesseract",
-      "description": "OCR engine for text recognition.",
-      "default-features": false,
-      "features": [
-        "eng",
-        "por"
-      ]
-    }
-  ],
-  "features": {
-    "tests": {
-      "description": "Dependencies for building unit and integration tests.",
-      "dependencies": [
-        {
-          "name": "gtest",
-          "description": "GoogleTest framework for C++ unit testing."
-        },
-        {
-          "name": "google-benchmark",
-          "description": "Google Benchmark library for performance microbenchmarks."
-        }
-      ]
-    }
-  },
-  "builtin-baseline": "a1e64af5c438a67f63e7f105131d3c75725b65f3",
-  "overrides": [
+      "description": "OCR engine for text recognition in images.",
+      "features": []
+    },
     {
-      "name": "onnxruntime", "version": "1.17.1"
+      "name": "portaudio",
+      "description": "Cross-platform audio I/O library, used for audio capture and playback.",
+      "features": []
     }
   ]
 }
