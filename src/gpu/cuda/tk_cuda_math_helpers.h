@@ -1,199 +1,112 @@
 /*
-* Copyright (C) 2025 Pedro Henrique / phdev13
-*
-* File: tk_cuda_math_helpers.h
-*
-* This header file provides a library of fundamental mathematical types and
-* functions (vectors, matrices) designed for high-performance computing in the
-* TrackieLLM project.
-*
-* CRITICAL DESIGN FEATURE: This header is "bilingual". It is written to be
-* fully compatible with both standard C/C++ compilers (for host-side code) and
-* the NVIDIA CUDA C++ compiler (NVCC, for device-side kernel code). This is
-* achieved through preprocessor macros that abstract away CUDA-specific
-* decorators like `__host__` and `__device__`.
-*
-* This unified approach is a cornerstone of robust GPGPU engineering, as it
-* eliminates code duplication, ensures data structure compatibility between CPU
-* and GPU, and provides a single, reliable mathematical foundation for all
-* vision and navigation algorithms. All functions are aggressively inlined for
-* maximum performance.
-*
-* SPDX-License-Identifier: AGPL-3.0 license
-*/
+ * Copyright (C) 2025 Pedro Henrique / phdev13
+ *
+ * File: tk_cuda_math_helpers.h
+ *
+ * This file contains device-side mathematical helper functions used across CUDA kernels
+ * in the TrackieLLM vision processing pipeline. These functions are optimized for GPU
+ * execution and provide common operations like activation functions, clamping, and
+ * interpolation that are frequently used in image processing and neural network inference.
+ *
+ * Dependencies:
+ *   - CUDA Runtime API
+ *
+ * SPDX-License-Identifier: AGPL-3.0 license
+ */
 
-#ifndef TRACKIELLM_GPU_CUDA_TK_CUDA_MATH_HELPERS_H
-#define TRACKIELLM_GPU_CUDA_TK_CUDA_MATH_HELPERS_H
+#ifndef TK_CUDA_MATH_HELPERS_H
+#define TK_CUDA_MATH_HELPERS_H
 
-#include <vector_types.h> // From CUDA Toolkit for float2, float3, etc.
-#include <vector_functions.h> // For make_float3, etc.
-#include <math.h>
-
-//------------------------------------------------------------------------------
-// Compiler Abstraction Macros
-//------------------------------------------------------------------------------
-
-#ifdef __CUDACC__
-    // Compiling with NVCC for CUDA
-    #define TK_CUDA_HD __host__ __device__
-    #define TK_CUDA_D __device__
-    #define TK_INLINE __forceinline__
-#else
-    // Compiling with a standard C/C++ compiler
-    #define TK_CUDA_HD
-    #define TK_CUDA_D
-    #define TK_INLINE inline
-#endif
-
-//------------------------------------------------------------------------------
-// Type Definitions
-//------------------------------------------------------------------------------
-
-// Define our own structs that wrap the CUDA vector types. This provides a
-// clear namespace and type safety.
-typedef struct { int2 v; } TkInt2;
-typedef struct { float2 v; } TkFloat2;
-typedef struct { float3 v; } TkFloat3;
-typedef struct { float4 v; } TkFloat4;
-
-// Column-major matrix definitions
-typedef struct {
-    TkFloat3 col0;
-    TkFloat3 col1;
-    TkFloat3 col2;
-} TkMatrix3x3;
-
-typedef struct {
-    TkFloat4 col0;
-    TkFloat4 col1;
-    TkFloat4 col2;
-    TkFloat4 col3;
-} TkMatrix4x4;
-
-
-//------------------------------------------------------------------------------
-// Constructors
-//------------------------------------------------------------------------------
-
-TK_CUDA_HD TK_INLINE TkInt2 make_tk_int2(int x, int y) {
-    TkInt2 t;
-    t.v = make_int2(x, y);
-    return t;
-}
-
-TK_CUDA_HD TK_INLINE TkFloat2 make_tk_float2(float x, float y) {
-    TkFloat2 t;
-    t.v = make_float2(x, y);
-    return t;
-}
-
-TK_CUDA_HD TK_INLINE TkFloat3 make_tk_float3(float x, float y, float z) {
-    TkFloat3 t;
-    t.v = make_float3(x, y, z);
-    return t;
-}
-
-TK_CUDA_HD TK_INLINE TkFloat4 make_tk_float4(float x, float y, float z, float w) {
-    TkFloat4 t;
-    t.v = make_float4(x, y, z, w);
-    return t;
-}
-
-TK_CUDA_HD TK_INLINE TkFloat4 make_tk_float4_from_float3(TkFloat3 v, float w) {
-    TkFloat4 t;
-    t.v = make_float4(v.v.x, v.v.y, v.v.z, w);
-    return t;
-}
-
-//------------------------------------------------------------------------------
-// Vector Operations
-//------------------------------------------------------------------------------
-
-// Addition
-TK_CUDA_HD TK_INLINE TkFloat3 add_f3(TkFloat3 a, TkFloat3 b) {
-    return make_tk_float3(a.v.x + b.v.x, a.v.y + b.v.y, a.v.z + b.v.z);
-}
-
-// Subtraction
-TK_CUDA_HD TK_INLINE TkFloat3 sub_f3(TkFloat3 a, TkFloat3 b) {
-    return make_tk_float3(a.v.x - b.v.x, a.v.y - b.v.y, a.v.z - b.v.z);
-}
-
-// Scalar Multiplication
-TK_CUDA_HD TK_INLINE TkFloat3 mul_f3_s(TkFloat3 a, float s) {
-    return make_tk_float3(a.v.x * s, a.v.y * s, a.v.z * s);
-}
-
-// Dot Product
-TK_CUDA_HD TK_INLINE float dot_f3(TkFloat3 a, TkFloat3 b) {
-    return a.v.x * b.v.x + a.v.y * b.v.y + a.v.z * b.v.z;
-}
-
-// Cross Product
-TK_CUDA_HD TK_INLINE TkFloat3 cross_f3(TkFloat3 a, TkFloat3 b) {
-    return make_tk_float3(a.v.y * b.v.z - a.v.z * b.v.y,
-                          a.v.z * b.v.x - a.v.x * b.v.z,
-                          a.v.x * b.v.y - a.v.y * b.v.x);
-}
-
-// Length
-TK_CUDA_HD TK_INLINE float length_f3(TkFloat3 a) {
-    return sqrtf(dot_f3(a, a));
-}
-
-// Normalize
-TK_CUDA_HD TK_INLINE TkFloat3 normalize_f3(TkFloat3 a) {
-    float len = length_f3(a);
-    // Avoid division by zero
-    if (len > 1e-6f) {
-        float inv_len = 1.0f / len;
-        return mul_f3_s(a, inv_len);
-    }
-    return make_tk_float3(0.0f, 0.0f, 0.0f);
-}
-
-// Linear Interpolation (Lerp)
-TK_CUDA_HD TK_INLINE TkFloat3 lerp_f3(TkFloat3 a, TkFloat3 b, float t) {
-    return add_f3(a, mul_f3_s(sub_f3(b, a), t));
-}
-
-//------------------------------------------------------------------------------
-// Matrix Operations
-//------------------------------------------------------------------------------
-
-TK_CUDA_HD TK_INLINE TkMatrix4x4 make_identity_m4x4() {
-    TkMatrix4x4 M;
-    M.col0 = make_tk_float4(1.0f, 0.0f, 0.0f, 0.0f);
-    M.col1 = make_tk_float4(0.0f, 1.0f, 0.0f, 0.0f);
-    M.col2 = make_tk_float4(0.0f, 0.0f, 1.0f, 0.0f);
-    M.col3 = make_tk_float4(0.0f, 0.0f, 0.0f, 1.0f);
-    return M;
-}
-
-TK_CUDA_HD TK_INLINE TkMatrix4x4 make_translation_m4x4(float x, float y, float z) {
-    TkMatrix4x4 M = make_identity_m4x4();
-    M.col3 = make_tk_float4(x, y, z, 1.0f);
-    return M;
-}
-
-// Matrix-Vector Multiplication (M * v)
-TK_CUDA_HD TK_INLINE TkFloat4 mul_m4x4_v4(TkMatrix4x4 M, TkFloat4 v) {
-    TkFloat4 res;
-    res.v.x = M.col0.v.x * v.v.x + M.col1.v.x * v.v.y + M.col2.v.x * v.v.z + M.col3.v.x * v.v.w;
-    res.v.y = M.col0.v.y * v.v.x + M.col1.v.y * v.v.y + M.col2.v.y * v.v.z + M.col3.v.y * v.v.w;
-    res.v.z = M.col0.v.z * v.v.x + M.col1.v.z * v.v.y + M.col2.v.z * v.v.z + M.col3.v.z * v.v.w;
-    res.v.w = M.col0.v.w * v.v.x + M.col1.v.w * v.v.y + M.col2.v.w * v.v.z + M.col3.v.w * v.v.w;
-    return res;
-}
-
-// C++ specific operator overloads for better ergonomics
 #ifdef __cplusplus
-TK_CUDA_HD TK_INLINE TkFloat3 operator+(TkFloat3 a, TkFloat3 b) { return add_f3(a, b); }
-TK_CUDA_HD TK_INLINE TkFloat3 operator-(TkFloat3 a, TkFloat3 b) { return sub_f3(a, b); }
-TK_CUDA_HD TK_INLINE TkFloat3 operator*(TkFloat3 a, float s) { return mul_f3_s(a, s); }
-TK_CUDA_HD TK_INLINE TkFloat3 operator*(float s, TkFloat3 a) { return mul_f3_s(a, s); }
-TK_CUDA_HD TK_INLINE TkFloat4 operator*(TkMatrix4x4 M, TkFloat4 v) { return mul_m4x4_v4(M, v); }
+extern "C" {
 #endif
 
+// Include CUDA headers
+#include <cuda_runtime.h>
+#include <math_constants.h>
 
-#endif // TRACKIELLM_GPU_CUDA_TK_CUDA_MATH_HELPERS_H
+// Device function declarations
+
+__device__ __forceinline__ float tk_cuda_sigmoidf(float x);
+__device__ __forceinline__ float tk_cuda_clampf(float value, float min_val, float max_val);
+__device__ __forceinline__ float tk_cuda_lerpf(float a, float b, float t);
+__device__ __forceinline__ int tk_cuda_clampi(int value, int min_val, int max_val);
+__device__ __forceinline__ float tk_cuda_relu(float x);
+__device__ __forceinline__ float tk_cuda_tanhf_approx(float x);
+__device__ __forceinline__ float tk_cuda_normalize_to_range(
+    float value, 
+    float in_min, 
+    float in_max, 
+    float out_min, 
+    float out_max
+);
+__device__ __forceinline__ float tk_cuda_fast_sqrt(float x);
+__device__ __forceinline__ float tk_cuda_fast_inverse_sqrt(float x);
+__device__ __forceinline__ float tk_cuda_absf(float x);
+__device__ __forceinline__ int tk_cuda_absi(int x);
+__device__ __forceinline__ float tk_cuda_roundf(float x);
+__device__ __forceinline__ float tk_cuda_floorf(float x);
+__device__ __forceinline__ float tk_cuda_ceilf(float x);
+__device__ __forceinline__ float tk_cuda_fmodf(float x, float y);
+__device__ __forceinline__ float tk_cuda_powf(float base, float exponent);
+__device__ __forceinline__ float tk_cuda_expf(float x);
+__device__ __forceinline__ float tk_cuda_logf(float x);
+__device__ __forceinline__ float tk_cuda_degrees_to_radians(float degrees);
+__device__ __forceinline__ float tk_cuda_radians_to_degrees(float radians);
+__device__ __forceinline__ float tk_cuda_smoothstep(float edge0, float edge1, float x);
+__device__ __forceinline__ float tk_cuda_luminance_from_rgb(float r, float g, float b);
+__device__ __forceinline__ float tk_cuda_distance_2d(float x1, float y1, float x2, float y2);
+__device__ __forceinline__ float tk_cuda_distance_3d(float x1, float y1, float z1, float x2, float y2, float z2);
+__device__ __forceinline__ float tk_cuda_dot_product_2d(float x1, float y1, float x2, float y2);
+__device__ __forceinline__ float tk_cuda_dot_product_3d(float x1, float y1, float z1, float x2, float y2, float z2);
+__device__ __forceinline__ float tk_cuda_magnitude_2d(float x, float y);
+__device__ __forceinline__ float tk_cuda_magnitude_3d(float x, float y, float z);
+__device__ __forceinline__ void tk_cuda_normalize_vector_2d(float* x, float* y);
+__device__ __forceinline__ void tk_cuda_normalize_vector_3d(float* x, float* y, float* z);
+__device__ __forceinline__ float tk_cuda_cross_product_2d(float x1, float y1, float x2, float y2);
+__device__ __forceinline__ float tk_cuda_angle_between_vectors_2d(float x1, float y1, float x2, float y2);
+__device__ __forceinline__ float tk_cuda_wrap_angle(float angle);
+__device__ __forceinline__ float tk_cuda_interpolate_bilinear(
+    float x, float y,
+    const float* data,
+    int width, int height
+);
+__device__ __forceinline__ float tk_cuda_gaussian_weight(float distance, float sigma);
+__device__ __forceinline__ float tk_cuda_softplus(float x);
+__device__ __forceinline__ float tk_cuda_elu(float x, float alpha);
+__device__ __forceinline__ float tk_cuda_swish(float x);
+__device__ __forceinline__ float tk_cuda_mish(float x);
+__device__ __forceinline__ float tk_cuda_gelu(float x);
+__device__ __forceinline__ float tk_cuda_hard_sigmoid(float x);
+__device__ __forceinline__ float tk_cuda_hard_tanh(float x);
+__device__ __forceinline__ float tk_cuda_leaky_relu(float x, float alpha);
+__device__ __forceinline__ float tk_cuda_prelu(float x, float alpha);
+__device__ __forceinline__ float tk_cuda_selu(float x);
+__device__ __forceinline__ float tk_cuda_threshold(float x, float threshold, float value);
+__device__ __forceinline__ float tk_cuda_soft_threshold(float x, float threshold);
+__device__ __forceinline__ float tk_cuda_hard_shrink(float x, float lambda);
+__device__ __forceinline__ float tk_cuda_soft_shrink(float x, float lambda);
+__device__ __forceinline__ float tk_cuda_normalize_to_unit_vector(float* vec, int size);
+__device__ __forceinline__ float tk_cuda_cosine_similarity(const float* a, const float* b, int size);
+__device__ __forceinline__ float tk_cuda_euclidean_distance(const float* a, const float* b, int size);
+__device__ __forceinline__ float tk_cuda_manhattan_distance(const float* a, const float* b, int size);
+__device__ __forceinline__ float tk_cuda_chebyshev_distance(const float* a, const float* b, int size);
+__device__ __forceinline__ float tk_cuda_minkowski_distance(const float* a, const float* b, int size, float p);
+__device__ __forceinline__ void tk_cuda_matrix_multiply_2x2(
+    const float a[4], const float b[4], float result[4]
+);
+__device__ __forceinline__ void tk_cuda_matrix_multiply_3x3(
+    const float a[9], const float b[9], float result[9]
+);
+__device__ __forceinline__ float tk_cuda_determinant_2x2(const float m[4]);
+__device__ __forceinline__ float tk_cuda_determinant_3x3(const float m[9]);
+__device__ __forceinline__ void tk_cuda_transpose_2x2(const float m[4], float result[4]);
+__device__ __forceinline__ void tk_cuda_transpose_3x3(const float m[9], float result[9]);
+__device__ __forceinline__ void tk_cuda_inverse_2x2(const float m[4], float result[4]);
+__device__ __forceinline__ void tk_cuda_inverse_3x3(const float m[9], float result[9]);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // TK_CUDA_MATH_HELPERS_H
