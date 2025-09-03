@@ -1,0 +1,5 @@
+googletrans==4.0.0-rc1
+PyYAML==6.0.1
+requests==2.28.1
+chardet==3.0.4
+markdown-it-py[plugins]==3.0.0

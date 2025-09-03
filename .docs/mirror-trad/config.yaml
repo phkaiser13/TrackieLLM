@@ -1,0 +1,32 @@
+# Configuration for the translation tool
+
+# The directory to scan for files to translate.
+source_dir: ./
+
+# The local directory where the translated files will be saved before being pushed.
+output_dir: ./translation_output/
+
+# Configuration for mirror repositories.
+mirrors:
+  - lang: 'pt'
+    repo_url: https://github.com/phkaiser13/TrackieLLM-pt-br
+
+# Files and directories to exclude from translation.
+exclude:
+  - .git/
+  - .github/
+  - .docs/mirror-trad/
+  - target/
+  - assets/
+  - third_party/
+  - translation_output/
+
+# File extensions to include in the translation.
+include_extensions:
+  - .rs
+  - .c
+  - .cpp
+  - .h
+  - .hpp
+  - .md
+  - .py

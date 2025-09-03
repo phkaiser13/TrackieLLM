@@ -1,0 +1,53 @@
+name: Translate Repository
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  translate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: pip install -r .docs/mirror-trad/requirements.txt
+
+      - name: Run translation script
+        run: python3 .docs/mirror-trad/translate.py
+        env:
+          TRANSLATION_API_KEY: ${{ secrets.TRANSLATION_API_KEY }}
+
+      - name: Push to mirror repository
+        run: |
+          # Load mirror config from yaml
+          LANG=$(python3 -c "import yaml; print(yaml.safe_load(open('.docs/mirror-trad/config.yaml'))['mirrors'][0]['lang'])")
+          REPO_URL=$(python3 -c "import yaml; print(yaml.safe_load(open('.docs/mirror-trad/config.yaml'))['mirrors'][0]['repo_url'])")
+          
+          # Clone mirror repo
+          git clone $REPO_URL mirror_repo
+          
+          # Copy translated files
+          rsync -av --delete translation_output/$LANG/ mirror_repo/
+          
+          # Commit and push
+          cd mirror_repo
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add .
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Automated translation update"
+            git push https://x-access-token:${{ secrets.GH_PAT }}@${REPO_URL#https://}
+          fi
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}

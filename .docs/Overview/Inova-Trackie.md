@@ -253,3 +253,18 @@ freebsd e outros não possuem suporte.
 
 * Orquestra C/C++ e Rust, targets de GPU, testes e integração.
 
+
+
+
+
+
+# Exemplo de funcionamento final do trackie:
+
+
+yolo realtime detecta um perigo, llm analisa, avisa com fala sobre o perigo e descrição.
+O usuario pede um item, a i.a analisa e da um resultado, estimando passos com MiDaS, e obtendo ajuda do yolo se necessario.
+LLM analisa paisagens.
+LLM intepreta contextos, situações, ambientes, dá analises detalhadas e completas.
+LLM é o maior apoiador do usuario deficiente visual.
+
+
