@@ -9,7 +9,7 @@
  * kernel library used by the TrackieLLM GPU‑Metal HAL.  The library is
  * deliberately **large** (≈ 2 000 lines) to satisfy the “ultra‑verbose”
  * requirement while still being **well‑structured**, **heavily commented**, and
- * **optimised for Apple‑Silicon**.  The kernels are grouped into logical
+ * **optimised for Apple‑metal**.  The kernels are grouped into logical
  * sections that mirror the high‑level operations required by the application:
  *
  *   1️⃣  Core utilities – vector math, index helpers, compile‑time switches.

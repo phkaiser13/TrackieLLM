@@ -34,14 +34,14 @@ The module is designed with a backend-based architecture. A generic frontend dis
     -   `tk_rocm_kernels.cpp`: Contains the custom HIP kernels (the C++ dialect for ROCm).
     -   `extensions/rocm/tk_rocm_tensor_ops.cpp`: Implements high-level tensor operations.
 
-### 3.3. Metal (Apple Silicon)
+### 3.3. Metal (Apple metal)
 
--   **Description:** The backend for Apple's M-series SoCs (System on a Chip), using the Metal API. It is highly optimized for the unified memory architecture of Apple Silicon, allowing for very efficient data sharing between the CPU and GPU.
+-   **Description:** The backend for Apple's M-series SoCs (System on a Chip), using the Metal API. It is highly optimized for the unified memory architecture of Apple metal, allowing for very efficient data sharing between the CPU and GPU.
 -   **Key Files:**
     -   `tk_metal_dispatch.mm`: Handles the dispatching of Metal compute shaders (kernels). The `.mm` extension indicates Objective-C++.
     -   `tk_metal_kernels.metal`: Contains the compute shaders written in the Metal Shading Language (MSL).
     -   `tk_metal_helpers.mm`: Provides helper functions for setting up Metal command queues, buffers, and pipelines.
-    -   `extensions/silicon/tk_metal_tensor_ops.mm`: Implements high-level tensor operations using Metal.
+    -   `extensions/metal/tk_metal_tensor_ops.mm`: Implements high-level tensor operations using Metal.
 
 ## 4. Integration
 

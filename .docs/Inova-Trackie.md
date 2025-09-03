@@ -207,7 +207,7 @@ freebsd e outros não possuem suporte.
 
   * **cuda/** – C/CUDA kernels, tensor/image ops.
   * **rocm/** – C++ ROCm ops.
-  * **silicon/** – Metal ops para Apple.
+  * **metal/** – Metal ops para Apple.
 * **integration/** – bridge para plugins externos, APIs e módulos embarcados.
 
   * **C/C++ files** – external interface.

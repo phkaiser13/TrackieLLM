@@ -9,7 +9,7 @@
 * utilities for resource creation and data transfer.
 *
 * This is a foundational component of the Hardware Abstraction Layer (HAL) for
-* Apple Silicon. It is intended for internal use by the Metal dispatch layer
+* Apple metal. It is intended for internal use by the Metal dispatch layer
 * (`tk_metal_dispatch.mm`) and should not be exposed to higher-level modules.
 *
 * All functions returning Metal objects (`id`) follow the Cocoa ownership policy:
@@ -19,8 +19,8 @@
 * SPDX-License-Identifier: AGPL-3.0 license
 */
 
-#ifndef TRACKIELLM_GPU_SILICON_TK_METAL_HELPERS_H
-#define TRACKIELLM_GPU_SILICON_TK_METAL_HELPERS_H
+#ifndef TRACKIELLM_GPU_metal_TK_METAL_HELPERS_H
+#define TRACKIELLM_GPU_metal_TK_METAL_HELPERS_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -175,4 +175,4 @@ TK_NODISCARD tk_error_code_t tk_metal_upload_frame_to_texture(id command_buffer,
 }
 #endif
 
-#endif // TRACKIELLM_GPU_SILICON_TK_METAL_HELPERS_H
+#endif // TRACKIELLM_GPU_metal_TK_METAL_HELPERS_H

@@ -104,7 +104,7 @@ Source code of application
         │   │   │   ├── tk_rocm_tensor_ops.hpp
         │   │   │   ├── tk_rocm_image_ops.cpp
         │   │   │   └── tk_rocm_image_ops.hpp
-        │   │   └── silicon/
+        │   │   └── metal/
         │   │       ├── tk_metal_tensor_ops.mm
         │   │       ├── tk_metal_tensor_ops.h
         │   │       ├── tk_metal_image_ops.mm
@@ -180,7 +180,7 @@ Source code of application
         │   │   │   ├── tk_rocm_dispatch.hpp
         │   │   │   ├── tk_rocm_kernels.cpp
         │   │   │   └── tk_rocm_kernels.hpp
-        │   │   └── silicon/
+        │   │   └── metal/
         │   │       ├── tk_metal_dispatch.mm
         │   │       ├── tk_metal_kernels.metal
         │   │       ├── tk_metal_helpers.mm

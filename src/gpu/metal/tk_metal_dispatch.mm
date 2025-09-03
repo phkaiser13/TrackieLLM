@@ -4,7 +4,7 @@
  * File: tk_metal_dispatch.mm
  *
  * This source file implements the Metal dispatcher – the high‑level GPU
- * abstraction layer for Apple‑Silicon devices.  The implementation mirrors the
+ * abstraction layer for Apple‑metal devices.  The implementation mirrors the
  * CUDA dispatcher (tk_cuda_dispatch.c) but uses the Metal API, Metal Performance
  * Shaders (MPS) and Apple‑specific facilities such as Core ML and the unified
  * memory architecture.

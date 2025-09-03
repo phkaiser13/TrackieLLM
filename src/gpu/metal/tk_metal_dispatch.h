@@ -4,7 +4,7 @@
  * File: tk_metal_dispatch.h
  *
  * This header defines the public API for the Metal Dispatcher, the high‑level
- * orchestration engine for the Apple‑Silicon GPU backend.  The dispatcher is the
+ * orchestration engine for the Apple‑metal GPU backend.  The dispatcher is the
  * sole entry point for all other TrackieLLM components that require GPU
  * acceleration on macOS / iOS devices.  Its design mirrors the CUDA dispatcher
  * (tk_cuda_dispatch.h) but exploits the unique characteristics of Metal:
