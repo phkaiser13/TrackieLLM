@@ -214,12 +214,17 @@ Source code of application
         │   │   ├── CMakeLists.txt
         │   │   ├── tk_build_system.c
         │   │   └── tk_build_system.h
-        │   └── ffi/
-        │       ├── tk_cortex_ffi.c
-        │       ├── tk_cortex_ffi.h
-        │       ├── tk_audio_ffi.c
-        │       ├── tk_audio_ffi.h
-        │       ├── tk_vision_ffi.cpp
-        │       └── tk_vision_ffi.hpp
-        ├── Cargo.toml
-        ├── CMakeLists.txt
+            └── ffi/
+                ├── c_api/
+                │   ├── tk_ffi_api.c
+                │   └── tk_ffi_api.h
+                │   ├── tk_ffi_cpp_api.cpp
+                │   └── tk_ffi_cpp_api.hpp
+                └── src/
+
+                        └── src/
+                        ├── lib.rs
+                        ├── ffi_bridge.rs
+                        └── utils.rs
+                ├── Cargo.toml
+
