@@ -1,0 +1,57 @@
+#
+# Copyright (C) 2025 Pedro Henrique / phdev13
+#
+# File: ci/docker/Dockerfile.bench
+#
+# This Dockerfile creates a containerized environment for running performance
+# benchmarks. The primary goal is to provide a consistent and isolated
+# environment to ensure that benchmark results are reproducible and not
+# affected by the host system's state. It leverages the dependency caching
+# from the development Dockerfile to speed up setup.
+#
+# Dependencies: Docker, project source code
+#
+# SPDX-License-Identifier: AGPL-3.0 license
+#
+
+# ---
+# Stage 1: Base Environment
+# ---
+# We start from the same base as the development environment to ensure
+# toolchain consistency.
+FROM rust:1.79 as base
+
+RUN apt-get update && apt-get install -y lld && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# ---
+# Stage 2: Dependency Caching
+# ---
+# This stage is identical to the one in Dockerfile.dev. It pre-compiles
+# all dependencies, including those required for benchmarking.
+FROM base as planner
+WORKDIR /app
+RUN cargo init --name project
+COPY Cargo.toml Cargo.lock ./
+# We add '--benches' to ensure dependencies for benchmarks are also built.
+RUN cargo build --release --benches
+
+# ---
+# Stage 3: Benchmark Image
+# ---
+# This is the final image used for running benchmarks.
+FROM base as benchmark
+WORKDIR /app
+
+# Copy the pre-compiled dependencies from the 'planner' stage.
+COPY --from=planner /app/target ./target
+COPY --from=planner /root/.cargo /root/.cargo
+
+# Copy the source code and the benchmark-specific code.
+COPY src ./src
+COPY benches ./benches
+
+# Define the default command to run all benchmarks.
+# The results will be printed to standard output.
+ENTRYPOINT ["cargo", "bench", "--all-features"]

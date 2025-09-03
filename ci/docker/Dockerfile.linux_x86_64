@@ -1,0 +1,66 @@
+#
+# Copyright (C) 2025 Pedro Henrique / phdev13
+#
+# File: ci/docker/Dockerfile.linux_x86_64
+#
+# This Dockerfile builds a minimal, production-ready container for the
+# linux/amd64 architecture. It employs a multi-stage build pattern to achieve
+# a small and secure final image. The 'builder' stage contains the full Rust
+# toolchain and source code, while the final stage is built from 'scratch'
+# and contains only the statically compiled application binary.
+#
+# Dependencies: Docker, project source code
+#
+# SPDX-License-Identifier: AGPL-3.0 license
+#
+
+# ---
+# Stage 1: Builder
+# ---
+# This stage uses the official Rust image to compile our application.
+# It is optimized to cache dependencies.
+FROM rust:1.79 as builder
+
+# Set the target architecture for clarity, although it's the default.
+ARG TARGET_ARCH=x86_64-unknown-linux-gnu
+
+# Install necessary build tools. 'lld' is a faster linker.
+RUN apt-get update && apt-get install -y lld && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Create a dummy project to cache dependencies separately.
+RUN cargo init --name project
+COPY Cargo.toml Cargo.lock ./
+# This build step populates the dependency cache.
+RUN cargo build --release --target ${TARGET_ARCH}
+
+# Now copy the actual source and build the final application.
+COPY src ./src
+# The --release flag enables optimizations.
+RUN cargo build --release --target ${TARGET_ARCH}
+
+# ---
+# Stage 2: Final Image
+# ---
+# This stage creates the final, minimal image. 'scratch' is an empty image
+# with no operating system, shell, or any other files. This is the most
+# secure base image possible.
+FROM scratch
+
+# Set metadata for the image.
+LABEL org.opencontainers.image.source="https://github.com/your-repo/your-project"
+LABEL org.opencontainers.image.description="Production image for the project"
+LABEL org.opencontainers.image.licenses="AGPL-3.0"
+
+# Copy the compiled binary from the 'builder' stage to the final image.
+# The binary is placed at the root of the filesystem.
+COPY --from=builder /app/target/${TARGET_ARCH}/release/project /app
+
+# Set the user to a non-root user for added security.
+# Since 'scratch' has no /etc/passwd, we use the UID.
+USER 10001
+
+# Define the command to run when the container starts.
+# This executes our application.
+ENTRYPOINT ["/app"]

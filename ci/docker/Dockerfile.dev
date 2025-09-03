@@ -1,0 +1,73 @@
+#
+# Copyright (C) 2025 Pedro Henrique / phdev13
+#
+# File: ci/docker/Dockerfile.dev
+#
+# This Dockerfile sets up a comprehensive and optimized development environment
+# for the project. It uses the official Rust image and pre-installs common
+# development tools. The key feature is the separation of dependency fetching
+# from source code copying, allowing Docker to cache the expensive dependency
+# layer and enabling near-instant rebuilds during active development.
+#
+# Dependencies: Docker
+#
+# SPDX-License-Identifier: AGPL-3.0 license
+#
+
+# ---
+# Stage 1: Base Environment
+# ---
+# We use the official Rust image, which comes with all the necessary build tools.
+# Using a specific version ensures reproducibility.
+FROM rust:1.79 as base
+
+# Install essential development tools.
+# - build-essential: For C/C++ compilers and linkers.
+# - pkg-config & libssl-dev: Common dependencies for many Rust crates.
+# - lld: A high-performance linker from the LLVM project, often faster than the default.
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    lld \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install cargo-watch for live-reloading during development.
+RUN cargo install cargo-watch
+
+# Set the working directory inside the container.
+WORKDIR /app
+
+# ---
+# Stage 2: Dependency Caching
+# ---
+# This is the core optimization for development. We create a dummy project
+# and copy only the dependency manifests (Cargo.toml, Cargo.lock) to it.
+# By running 'cargo build' on this dummy project, Docker caches the result
+# of fetching and compiling all dependencies. This layer only gets invalidated
+# if Cargo.toml or Cargo.lock changes.
+FROM base as planner
+WORKDIR /app
+RUN cargo init --name project
+COPY Cargo.toml Cargo.lock ./
+# Build only the dependencies to create the cache layer.
+RUN cargo build --release
+
+# ---
+# Stage 3: Development Image
+# ---
+# This is the final image used for development.
+FROM base as development
+WORKDIR /app
+
+# Copy the pre-compiled dependencies from the 'planner' stage.
+COPY --from=planner /app/target ./target
+COPY --from=planner /root/.cargo /root/.cargo
+
+# Now, copy the actual source code. This is the layer that will change most often.
+COPY src ./src
+
+# Set an entrypoint that provides a shell.
+# This allows a developer to 'docker run -it' and get an interactive session
+# inside the fully configured development environment.
+CMD ["/bin/bash"]

@@ -1,0 +1,123 @@
+#
+# Copyright (C) 2025 Pedro Henrique / phdev13
+#
+# File: ci/azure-pipelines.yml
+#
+# This file defines the complete CI/CD pipeline for the project using Azure
+# Pipelines. It's structured into logical stages to provide fast feedback
+# and build a comprehensive set of artifacts. The pipeline leverages the
+# scripts in the 'ci/scripts' directory to encapsulate complex logic, keeping
+# this YAML file declarative and easy to read.
+#
+# SPDX-License-Identifier: AGPL-3.0 license
+#
+
+trigger:
+  branches:
+    include:
+    - main
+    - release/*
+  paths:
+    include:
+    - src/*
+    - ci/*
+    - Cargo.toml
+    - Cargo.lock
+
+pr:
+  branches:
+    include:
+    - main
+  paths:
+    include:
+    - src/*
+    - ci/*
+    - Cargo.toml
+    - Cargo.lock
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+- stage: Validate
+  displayName: 'Validate Code Quality'
+  jobs:
+  - job: Lint_and_Test
+    displayName: 'Lint, Test, and Security Audit'
+    steps:
+    - task: Cache@2
+      inputs:
+        key: 'cargo | $(Agent.OS) | Cargo.lock'
+        path: /home/vsts/.cargo/registry
+        restoreKeys: |
+          cargo | $(Agent.OS)
+      displayName: 'Cache Cargo Dependencies'
+
+    - script: |
+        chmod +x ci/scripts/run_static_analysis.sh
+        ci/scripts/run_static_analysis.sh
+      displayName: 'Run Static Analysis (fmt, clippy, audit)'
+
+    - script: cargo test --all-features
+      displayName: 'Run Unit and Integration Tests'
+
+- stage: Build
+  displayName: 'Build Binaries'
+  dependsOn: Validate
+  jobs:
+  - job: Build_x86_64
+    displayName: 'Build for Linux x86_64'
+    steps:
+    - script: |
+        chmod +x ci/scripts/cross_build.sh
+        ci/scripts/cross_build.sh x86_64
+      displayName: 'Run x86_64 Build'
+    
+    - publish: $(Build.SourcesDirectory)/artifacts/x86_64
+      artifact: linux-x86_64-binary
+      displayName: 'Publish x86_64 Binary Artifact'
+
+  - job: Build_arm64
+    displayName: 'Build for Linux ARM64'
+    steps:
+    - script: |
+        chmod +x ci/scripts/cross_build.sh
+        ci/scripts/cross_build.sh arm64
+      displayName: 'Run ARM64 Cross-Build'
+
+    - publish: $(Build.SourcesDirectory)/artifacts/arm64
+      artifact: linux-arm64-binary
+      displayName: 'Publish ARM64 Binary Artifact'
+
+- stage: Package
+  displayName: 'Package and Publish'
+  # Only run this stage for the main branch, not for PRs.
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+  dependsOn: Build
+  jobs:
+  - job: Package_and_SBOM
+    displayName: 'Generate SBOM and Release Tarball'
+    steps:
+    - download: current
+      artifact: linux-x86_64-binary
+      displayName: 'Download x86_64 Binary'
+      
+    - script: |
+        # Recreate the artifact directory structure
+        mkdir -p target/x86_64-unknown-linux-gnu/release
+        mv $(Pipeline.Workspace)/linux-x86_64-binary/* target/x86_64-unknown-linux-gnu/release/
+        
+        chmod +x ci/scripts/generate_sbom.sh
+        ci/scripts/generate_sbom.sh
+        
+        chmod +x ci/scripts/build_release_artifacts.sh
+        ci/scripts/build_release_artifacts.sh
+      displayName: 'Generate SBOM and Package Artifacts'
+
+    - publish: $(Build.SourcesDirectory)/artifacts
+      artifact: SBOM
+      displayName: 'Publish SBOM'
+      
+    - publish: $(Build.SourcesDirectory)/*.tar.gz
+      artifact: ReleasePackage
+      displayName: 'Publish Release Tarball'

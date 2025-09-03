@@ -1,0 +1,73 @@
+#
+# Copyright (C) 2025 Pedro Henrique / phdev13
+#
+# File: ci/docker/Dockerfile.linux_arm64_cross
+#
+# This Dockerfile builds a production-ready container for the linux/arm64
+# (aarch64) architecture by cross-compiling from an x86_64 host.
+# It follows the same multi-stage pattern as the native x86_64 Dockerfile
+# but adds the necessary Rust target and a C cross-compiler toolchain for linking.
+#
+# Dependencies: Docker, project source code
+#
+# SPDX-License-Identifier: AGPL-3.0 license
+#
+
+# ---
+# Stage 1: Builder
+# ---
+# This stage compiles the application for the ARM64 target.
+FROM rust:1.79 as builder
+
+# Define the target architecture as an argument for clarity and flexibility.
+ARG TARGET_ARCH=aarch64-unknown-linux-gnu
+
+# ---
+# Install cross-compilation toolchain
+# ---
+# 1. Add the aarch64 target for rustup.
+# 2. Install the C cross-compiler toolchain (gcc-aarch64-linux-gnu). This is
+#    essential for the linker to correctly assemble the final binary for ARM64.
+RUN rustup target add ${TARGET_ARCH} && \
+    apt-get update && \
+    apt-get install -y gcc-aarch64-linux-gnu && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set the linker for our target architecture in the Cargo configuration.
+# This tells Cargo to use the cross-compiler we just installed.
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+
+WORKDIR /app
+
+# Create a dummy project to cache dependencies separately.
+RUN cargo init --name project
+COPY Cargo.toml Cargo.lock ./
+# Build dependencies for the target architecture.
+RUN cargo build --release --target ${TARGET_ARCH}
+
+# Now copy the actual source and build the final application.
+COPY src ./src
+RUN cargo build --release --target ${TARGET_ARCH}
+
+# ---
+# Stage 2: Final Image
+# ---
+# This stage creates the final, minimal image from scratch.
+# IMPORTANT: The resulting image is for the ARM64 architecture. It will not
+# run on an x86_64 Docker host without emulation (e.g., QEMU).
+FROM scratch
+
+# Set metadata for the image.
+LABEL org.opencontainers.image.source="https://github.com/your-repo/your-project"
+LABEL org.opencontainers.image.description="Production image for the project (ARM64)"
+LABEL org.opencontainers.image.licenses="AGPL-3.0"
+LABEL org.opencontainers.image.architecture="arm64"
+
+# Copy the compiled ARM64 binary from the 'builder' stage.
+COPY --from=builder /app/target/${TARGET_ARCH}/release/project /app
+
+# Set a non-root user.
+USER 10001
+
+# Define the entrypoint.
+ENTRYPOINT ["/app"]
