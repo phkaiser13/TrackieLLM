@@ -1,0 +1,29 @@
+[package]
+name = "trackiellm-memory"
+version = "1.0.0"
+edition = "2021"
+authors = ["Pedro Henrique <phdev13@example.com>"]
+description = "Memory management module for TrackieLLM - custom allocators and memory arenas"
+license = "AGPL-3.0"
+repository = "https://github.com/example/trackiellm"
+
+[lib]
+name = "trackiellm_memory"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# For robust error handling
+thiserror = "1.0"
+
+# For the FFI global state management
+lazy_static = "1.4"
+
+[dev-dependencies]
+# For testing
+rand = "0.8" # For randomized allocation/deallocation tests
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"

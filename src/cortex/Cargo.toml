@@ -1,0 +1,41 @@
+[package]
+name = "trackiellm-cortex"
+version = "1.0.0"
+edition = "2021"
+authors = ["Pedro Henrique <phdev13@example.com>"]
+description = "Cortex module for TrackieLLM - reasoning and memory management"
+license = "AGPL-3.0"
+repository = "https://github.com/example/trackiellm"
+
+[lib]
+name = "trackiellm_cortex"
+crate-type = ["cdylib", "rlib"]
+path = "rust/lib.rs"
+
+[dependencies]
+# For robust error handling
+thiserror = "1.0"
+
+# For the FFI global state management
+lazy_static = "1.4"
+
+# For FFI data exchange and other serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# For efficient vector/embedding manipulation
+ndarray = "0.15"
+
+# For unique memory fragment IDs
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+# For testing
+approx = "0.5" # For float comparisons in similarity tests
+tempfile = "3.0"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"

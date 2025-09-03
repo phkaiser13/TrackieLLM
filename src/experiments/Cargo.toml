@@ -1,0 +1,37 @@
+[package]
+name = "trackiellm-experiments"
+version = "1.0.0"
+edition = "2021"
+authors = ["Pedro Henrique <phdev13@example.com>"]
+description = "Experiments module for TrackieLLM - for model analysis and metrics comparison"
+license = "AGPL-3.0"
+repository = "https://github.com/example/trackiellm"
+
+[lib]
+name = "trackiellm_experiments"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# For serializing and deserializing experiment data
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# For robust error handling
+thiserror = "1.0"
+
+# For statistical computations (e.g., mean, stddev, t-tests)
+statrs = "0.16"
+
+# For the FFI global state management
+lazy_static = "1.4"
+
+[dev-dependencies]
+# Dependencies for testing
+approx = "0.5" # For floating-point comparisons in tests
+tempfile = "3.0"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"

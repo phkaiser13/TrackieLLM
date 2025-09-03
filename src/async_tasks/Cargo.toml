@@ -1,0 +1,42 @@
+[package]
+name = "trackiellm-async-tasks"
+version = "1.0.0"
+edition = "2021"
+authors = ["Pedro Henrique <phdev13@example.com>"]
+description = "Asynchronous task management and execution module for TrackieLLM"
+license = "AGPL-3.0"
+repository = "https://github.com/example/trackiellm"
+
+[lib]
+name = "trackiellm_async_tasks"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# The core async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Core async utilities, like Abortable futures
+futures = "0.3"
+
+# For generating unique task IDs
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# For robust error handling
+thiserror = "1.0"
+
+# For the FFI global state management
+lazy_static = "1.4"
+
+# For FFI data exchange
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[dev-dependencies]
+# For testing
+tokio-test = "0.4"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"

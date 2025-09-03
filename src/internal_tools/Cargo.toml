@@ -1,0 +1,38 @@
+[package]
+name = "trackiellm-internal-tools"
+version = "1.0.0"
+edition = "2021"
+authors = ["Pedro Henrique <phdev13@example.com>"]
+description = "Internal tools module for TrackieLLM - configuration loading and file system utilities"
+license = "AGPL-3.0"
+repository = "https://github.com/example/trackiellm"
+
+[lib]
+name = "trackiellm_internal_tools"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# For parsing config files (e.g., TOML, JSON)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# For robust error handling
+thiserror = "1.0"
+
+# For file system utilities
+glob = "0.3"
+walkdir = "2"
+
+# For the FFI global state management
+lazy_static = "1.4"
+
+[dev-dependencies]
+tempfile = "3.0"
+assert_fs = "1.0"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"

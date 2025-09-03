@@ -1,0 +1,38 @@
+[package]
+name = "trackiellm-integration"
+version = "1.0.0"
+edition = "2021"
+authors = ["Pedro Henrique <phdev13@example.com>"]
+description = "Integration module for TrackieLLM - dynamic plugin management"
+license = "AGPL-3.0"
+repository = "https://github.com/example/trackiellm"
+
+[lib]
+name = "trackiellm_integration"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# For loading dynamic libraries (.so, .dll, .dylib)
+libloading = "0.8"
+
+# For robust error handling
+thiserror = "1.0"
+anyhow = "1.0" # For flexible error handling in the plugin trait
+
+# For the FFI global state management
+lazy_static = "1.4"
+
+# For FFI data exchange
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[dev-dependencies]
+# For testing
+# We would need a dummy plugin crate to test this properly.
+# For now, we'll keep dev-dependencies minimal.
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"

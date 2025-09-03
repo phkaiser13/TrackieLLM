@@ -1,0 +1,43 @@
+[package]
+name = "trackiellm-networking"
+version = "1.0.0"
+edition = "2021"
+authors = ["Pedro Henrique <phdev13@example.com>"]
+description = "Networking module for TrackieLLM - custom protocol, connection pooling"
+license = "AGPL-3.0"
+repository = "https://github.com/example/trackiellm"
+
+[lib]
+name = "trackiellm_networking"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# The core async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Utilities for working with byte buffers
+bytes = "1"
+
+# For binary serialization/deserialization
+bincode = "1.3"
+serde = { version = "1.0", features = ["derive"] }
+
+# For robust error handling
+thiserror = "1.0"
+
+# To allow async functions in traits
+async-trait = "0.1"
+
+# For the FFI global state management
+lazy_static = "1.4"
+
+[dev-dependencies]
+# For testing
+tokio-test = "0.4"
+futures = "0.3" # For stream utilities in tests
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"

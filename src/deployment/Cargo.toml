@@ -1,0 +1,37 @@
+[package]
+name = "trackiellm-deployment"
+version = "1.0.0"
+edition = "2021"
+authors = ["Pedro Henrique <phdev13@example.com>"]
+description = "Deployment module for TrackieLLM - handles version checking and package management"
+license = "AGPL-3.0"
+repository = "https://github.com/example/trackiellm"
+
+[lib]
+name = "trackiellm_deployment"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# For semantic version parsing and comparison
+semver = { version = "1.0", features = ["serde"] }
+
+# For serializing and deserializing data structures (e.g., package manifests)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# For robust error handling
+thiserror = "1.0"
+
+# For potential async operations or complex state management
+lazy_static = "1.4"
+
+[dev-dependencies]
+# Dependencies for testing
+tempfile = "3.0"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"

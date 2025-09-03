@@ -14,19 +14,23 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 # Core dependencies for basic functionality
 libc = "0.2"
+thiserror = "1.0"
 
 # Optional dependencies for enhanced functionality
 # Note: These would be enabled based on target platform and features
 sodiumoxide = { version = "0.2", optional = true }
 ring = { version = "0.17", optional = true }
 rand = { version = "0.8", optional = true }
+zeroize = { version = "1.7", features = ["zeroize_derive"], optional = true }
+sha2 = { version = "0.10", optional = true }
+hex = { version = "0.4", optional = true }
 
 [dev-dependencies]
 # Dependencies for testing
 tempfile = "3.0"
 
 [features]
-default = ["basic_crypto"]
+default = ["ring_crypto"]
 
 # Basic crypto using simple hash-based key derivation (current implementation)
 basic_crypto = []
@@ -35,7 +39,7 @@ basic_crypto = []
 enhanced_crypto = ["sodiumoxide"]
 
 # Alternative crypto using ring
-ring_crypto = ["ring", "rand"]
+ring_crypto = ["ring", "rand", "zeroize", "sha2", "hex"]
 
 # Enable all security features
 full_security = ["enhanced_crypto", "ring_crypto"]
