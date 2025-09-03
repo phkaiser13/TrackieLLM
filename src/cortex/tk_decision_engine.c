@@ -1,21 +1,24 @@
 /*
-* Copyright (C) 2025 Pedro Henrique / phdev13
-*
-* File: tk_decision_engine.c
-*
-* Implementation of the Decision Engine for TrackieLLM Cortex.
-* This module interprets LLM responses and executes corresponding actions
-* in a safe, prioritized, and context-aware manner.
-*
-* Key features:
-* - Structured LLM response parsing with validation
-* - Priority-based action execution queue
-* - Context-aware action validation
-* - Thread-safe operation with timeout handling
-* - Emergency response capabilities
-*
-* SPDX-License-Identifier: AGPL-3.0 license AGPL-3.0 license
-*/
+ * Copyright (C) 2025 Pedro Henrique / phdev13
+ *
+ * File: tk_decision_engine.c
+ *
+ * Implementation of the Decision Engine for TrackieLLM Cortex.
+ * This module interprets LLM responses and executes corresponding actions
+ * in a safe, prioritized, and context-aware manner.
+ *
+ * Key features:
+ * - Structured LLM response parsing with validation using cJSON
+ * - Priority-based action execution queue
+ * - Context-aware action validation
+ * - Thread-safe operation with timeout handling
+ * - Emergency response capabilities
+ *
+ * Dependencies:
+ * - cJSON library for JSON parsing
+ *
+ * SPDX-License-Identifier: AGPL-3.0 license
+ */
 
 #include "tk_decision_engine.h"
 #include "utils/tk_logging.h"
@@ -27,6 +30,7 @@
 #include <math.h>
 #include <time.h>
 #include <stdatomic.h>
+#include <cjson/cjson.h> // Include cJSON for JSON parsing
 
 // Internal action queue structure
 typedef struct {
@@ -74,7 +78,7 @@ static tk_error_code_t find_action_in_queue(const action_queue_t* queue, uint64_
 static tk_error_code_t update_action_status(action_queue_t* queue, uint64_t action_id, tk_action_status_e status, const char* error_msg);
 static uint64_t generate_action_id(void);
 static bool validate_action_params(const tk_action_params_t* params, const tk_context_summary_t* context);
-static tk_error_code_t execute_single_action(tk_decision_engine_t* engine, tk_action_t* action);
+static tk_error_code_t execute_single_action(tk_decision_engine_t* engine, tk_action_t* action, void* audio_ctx, void* nav_ctx, void* reasoner_ctx);
 static void free_action_resources(tk_action_t* action);
 static void free_action_params_resources(tk_action_params_t* params);
 static tk_error_code_t parse_llm_response_text(const char* text, tk_llm_response_t** out_response);
@@ -484,7 +488,10 @@ tk_error_code_t tk_decision_engine_cancel_action(
 
 tk_error_code_t tk_decision_engine_process_actions(
     tk_decision_engine_t* engine,
-    uint64_t current_time_ns) {
+    uint64_t current_time_ns,
+    void* audio_ctx,
+    void* nav_ctx,
+    void* reasoner_ctx) {
     
     if (!engine) {
         return TK_ERROR_INVALID_ARGUMENT;
@@ -579,7 +586,7 @@ tk_error_code_t tk_decision_engine_process_actions(
         free_action_resources(&action);
         
         // Execute the action
-        result = execute_single_action(engine, &engine->executing_queue.actions[engine->executing_queue.count - 1]);
+        result = execute_single_action(engine, &engine->executing_queue.actions[engine->executing_queue.count - 1], audio_ctx, nav_ctx, reasoner_ctx);
         if (result != TK_SUCCESS) {
             tk_log_error("Failed to execute action %llu: %d", 
                         (unsigned long long)action.action_id, result);
@@ -1091,50 +1098,193 @@ static bool validate_action_params(const tk_action_params_t* params, const tk_co
     return true;
 }
 
-static tk_error_code_t execute_single_action(tk_decision_engine_t* engine, tk_action_t* action) {
+static tk_error_code_t execute_single_action(tk_decision_engine_t* engine, tk_action_t* action, void* audio_ctx, void* nav_ctx, void* reasoner_ctx) {
     if (!engine || !action) {
         return TK_ERROR_INVALID_ARGUMENT;
     }
     
     log_action_execution(action);
     
-    // In a real implementation, this would interface with actual system components
-    // For now, we'll simulate successful execution
-    
+    // Execute action based on its type
     switch (action->params.type) {
-        case TK_ACTION_TYPE_SPEAK:
-            tk_log_info("Executing SPEAK action: '%s'", action->params.params.speak.text);
-            // In real implementation: tk_audio_pipeline_speak(engine->audio_pipeline, ...)
-            break;
+        case TK_ACTION_TYPE_SPEAK: {
+            if (!audio_ctx) {
+                tk_log_error("Audio context is NULL for SPEAK action");
+                action->status = TK_ACTION_STATUS_FAILED;
+                free(action->error_message);
+                action->error_message = strdup("Audio context is NULL");
+                if (!action->error_message) {
+                    return TK_ERROR_OUT_OF_MEMORY;
+                }
+                return TK_ERROR_INVALID_ARGUMENT;
+            }
             
-        case TK_ACTION_TYPE_NAVIGATE_GUIDE:
+            tk_log_info("Executing SPEAK action: '%s'", action->params.params.speak.text);
+            
+            // Call the audio pipeline function
+            tk_error_code_t result = tk_audio_pipeline_synthesize_text(audio_ctx, action->params.params.speak.text);
+            if (result != TK_SUCCESS) {
+                tk_log_error("Failed to synthesize text: %d", result);
+                action->status = TK_ACTION_STATUS_FAILED;
+                free(action->error_message);
+                action->error_message = strdup("Failed to synthesize text");
+                if (!action->error_message) {
+                    return TK_ERROR_OUT_OF_MEMORY;
+                }
+                return result;
+            }
+            break;
+        }
+            
+        case TK_ACTION_TYPE_NAVIGATE_GUIDE: {
+            if (!nav_ctx) {
+                tk_log_error("Navigation context is NULL for NAVIGATE_GUIDE action");
+                action->status = TK_ACTION_STATUS_FAILED;
+                free(action->error_message);
+                action->error_message = strdup("Navigation context is NULL");
+                if (!action->error_message) {
+                    return TK_ERROR_OUT_OF_MEMORY;
+                }
+                return TK_ERROR_INVALID_ARGUMENT;
+            }
+            
             tk_log_info("Executing NAVIGATE_GUIDE action: '%s'", 
                        action->params.params.navigate_guide.instruction);
-            // In real implementation: tk_navigation_engine_provide_guidance(...)
-            break;
             
-        case TK_ACTION_TYPE_NAVIGATE_WARN:
+            // Call the navigation engine function
+            tk_error_code_t result = tk_navigation_engine_provide_guidance(
+                nav_ctx, 
+                action->params.params.navigate_guide.instruction,
+                action->params.params.navigate_guide.direction_deg
+            );
+            if (result != TK_SUCCESS) {
+                tk_log_error("Failed to provide navigation guidance: %d", result);
+                action->status = TK_ACTION_STATUS_FAILED;
+                free(action->error_message);
+                action->error_message = strdup("Failed to provide navigation guidance");
+                if (!action->error_message) {
+                    return TK_ERROR_OUT_OF_MEMORY;
+                }
+                return result;
+            }
+            break;
+        }
+            
+        case TK_ACTION_TYPE_NAVIGATE_WARN: {
+            if (!nav_ctx) {
+                tk_log_error("Navigation context is NULL for NAVIGATE_WARN action");
+                action->status = TK_ACTION_STATUS_FAILED;
+                free(action->error_message);
+                action->error_message = strdup("Navigation context is NULL");
+                if (!action->error_message) {
+                    return TK_ERROR_OUT_OF_MEMORY;
+                }
+                return TK_ERROR_INVALID_ARGUMENT;
+            }
+            
             tk_log_info("Executing NAVIGATE_WARN action: '%s'", 
                        action->params.params.navigate_warn.warning_text);
-            // In real implementation: tk_navigation_engine_issue_warning(...)
-            break;
             
-        case TK_ACTION_TYPE_DESCRIBE_ENVIRONMENT:
-            tk_log_info("Executing DESCRIBE_ENVIRONMENT action");
-            // In real implementation: generate_environment_description(...)
+            // Call the navigation engine function
+            tk_error_code_t result = tk_navigation_engine_issue_warning(
+                nav_ctx,
+                action->params.params.navigate_warn.warning_text,
+                action->params.params.navigate_warn.obstacle_id
+            );
+            if (result != TK_SUCCESS) {
+                tk_log_error("Failed to issue navigation warning: %d", result);
+                action->status = TK_ACTION_STATUS_FAILED;
+                free(action->error_message);
+                action->error_message = strdup("Failed to issue navigation warning");
+                if (!action->error_message) {
+                    return TK_ERROR_OUT_OF_MEMORY;
+                }
+                return result;
+            }
             break;
+        }
             
-        case TK_ACTION_TYPE_DESCRIBE_OBJECT:
+        case TK_ACTION_TYPE_DESCRIBE_OBJECT: {
+            if (!audio_ctx || !reasoner_ctx) {
+                tk_log_error("Audio or reasoner context is NULL for DESCRIBE_OBJECT action");
+                action->status = TK_ACTION_STATUS_FAILED;
+                free(action->error_message);
+                action->error_message = strdup("Audio or reasoner context is NULL");
+                if (!action->error_message) {
+                    return TK_ERROR_OUT_OF_MEMORY;
+                }
+                return TK_ERROR_INVALID_ARGUMENT;
+            }
+            
             tk_log_info("Executing DESCRIBE_OBJECT action for object ID %u", 
                        action->params.params.describe_object.object_id);
-            // In real implementation: describe_object_by_id(...)
-            break;
             
-        case TK_ACTION_TYPE_READ_TEXT:
+            // Create a buffer for the object description
+            char description[512];
+            
+            // Call the contextual reasoner to get object details
+            tk_error_code_t result = tk_contextual_reasoner_get_object_details(
+                reasoner_ctx,
+                action->params.params.describe_object.object_id,
+                description,
+                sizeof(description)
+            );
+            
+            if (result != TK_SUCCESS) {
+                tk_log_error("Failed to get object details: %d", result);
+                action->status = TK_ACTION_STATUS_FAILED;
+                free(action->error_message);
+                action->error_message = strdup("Failed to get object details");
+                if (!action->error_message) {
+                    return TK_ERROR_OUT_OF_MEMORY;
+                }
+                return result;
+            }
+            
+            // Now speak the description using the audio pipeline
+            result = tk_audio_pipeline_synthesize_text(audio_ctx, description);
+            if (result != TK_SUCCESS) {
+                tk_log_error("Failed to synthesize object description: %d", result);
+                action->status = TK_ACTION_STATUS_FAILED;
+                free(action->error_message);
+                action->error_message = strdup("Failed to synthesize object description");
+                if (!action->error_message) {
+                    return TK_ERROR_OUT_OF_MEMORY;
+                }
+                return result;
+            }
+            break;
+        }
+            
+        case TK_ACTION_TYPE_READ_TEXT: {
+            if (!audio_ctx) {
+                tk_log_error("Audio context is NULL for READ_TEXT action");
+                action->status = TK_ACTION_STATUS_FAILED;
+                free(action->error_message);
+                action->error_message = strdup("Audio context is NULL");
+                if (!action->error_message) {
+                    return TK_ERROR_OUT_OF_MEMORY;
+                }
+                return TK_ERROR_INVALID_ARGUMENT;
+            }
+            
             tk_log_info("Executing READ_TEXT action: '%.50s...'", 
                        action->params.params.read_text.text_content);
-            // In real implementation: tk_audio_pipeline_speak(engine->audio_pipeline, ...)
+            
+            // Call the audio pipeline function
+            tk_error_code_t result = tk_audio_pipeline_synthesize_text(audio_ctx, action->params.params.read_text.text_content);
+            if (result != TK_SUCCESS) {
+                tk_log_error("Failed to synthesize text: %d", result);
+                action->status = TK_ACTION_STATUS_FAILED;
+                free(action->error_message);
+                action->error_message = strdup("Failed to synthesize text");
+                if (!action->error_message) {
+                    return TK_ERROR_OUT_OF_MEMORY;
+                }
+                return result;
+            }
             break;
+        }
             
         case TK_ACTION_TYPE_SYSTEM_MODE_CHANGE:
             tk_log_info("Executing SYSTEM_MODE_CHANGE action");
@@ -1148,17 +1298,66 @@ static tk_error_code_t execute_single_action(tk_decision_engine_t* engine, tk_ac
             // In real implementation: update_system_setting(...)
             break;
             
-        case TK_ACTION_TYPE_USER_QUERY_RESPONSE:
+        case TK_ACTION_TYPE_USER_QUERY_RESPONSE: {
+            if (!audio_ctx) {
+                tk_log_error("Audio context is NULL for USER_QUERY_RESPONSE action");
+                action->status = TK_ACTION_STATUS_FAILED;
+                free(action->error_message);
+                action->error_message = strdup("Audio context is NULL");
+                if (!action->error_message) {
+                    return TK_ERROR_OUT_OF_MEMORY;
+                }
+                return TK_ERROR_INVALID_ARGUMENT;
+            }
+            
             tk_log_info("Executing USER_QUERY_RESPONSE action: '%.50s...'", 
                        action->params.params.user_query_response.response_text);
-            // In real implementation: tk_audio_pipeline_speak(engine->audio_pipeline, ...)
-            break;
             
-        case TK_ACTION_TYPE_EMERGENCY_ALERT:
+            // Call the audio pipeline function
+            tk_error_code_t result = tk_audio_pipeline_synthesize_text(audio_ctx, action->params.params.user_query_response.response_text);
+            if (result != TK_SUCCESS) {
+                tk_log_error("Failed to synthesize user query response: %d", result);
+                action->status = TK_ACTION_STATUS_FAILED;
+                free(action->error_message);
+                action->error_message = strdup("Failed to synthesize user query response");
+                if (!action->error_message) {
+                    return TK_ERROR_OUT_OF_MEMORY;
+                }
+                return result;
+            }
+            break;
+        }
+            
+        case TK_ACTION_TYPE_EMERGENCY_ALERT: {
+            if (!audio_ctx) {
+                tk_log_error("Audio context is NULL for EMERGENCY_ALERT action");
+                action->status = TK_ACTION_STATUS_FAILED;
+                free(action->error_message);
+                action->error_message = strdup("Audio context is NULL");
+                if (!action->error_message) {
+                    return TK_ERROR_OUT_OF_MEMORY;
+                }
+                return TK_ERROR_INVALID_ARGUMENT;
+            }
+            
             tk_log_warning("Executing EMERGENCY_ALERT action: '%s'", 
                           action->params.params.emergency_alert.alert_message);
-            // In real implementation: tk_audio_pipeline_speak(engine->audio_pipeline, ...)
+            
+            // Call the audio pipeline function
+            // TODO: Consider implementing a higher priority alert function in the audio pipeline
+            tk_error_code_t result = tk_audio_pipeline_synthesize_text(audio_ctx, action->params.params.emergency_alert.alert_message);
+            if (result != TK_SUCCESS) {
+                tk_log_error("Failed to synthesize emergency alert: %d", result);
+                action->status = TK_ACTION_STATUS_FAILED;
+                free(action->error_message);
+                action->error_message = strdup("Failed to synthesize emergency alert");
+                if (!action->error_message) {
+                    return TK_ERROR_OUT_OF_MEMORY;
+                }
+                return result;
+            }
             break;
+        }
             
         default:
             tk_log_warning("Unknown action type: %d", action->params.type);
@@ -1282,47 +1481,496 @@ static tk_error_code_t parse_llm_response_text(const char* text, tk_llm_response
         return TK_ERROR_INVALID_ARGUMENT;
     }
     
-    // In a real implementation, this would parse structured responses from the LLM
-    // For now, we'll create a simple response with one speak action
+    // Parse the JSON text
+    cJSON* json = cJSON_Parse(text);
+    if (!json) {
+        tk_log_error("Failed to parse JSON response from LLM");
+        return TK_ERROR_INVALID_FORMAT;
+    }
     
+    // Allocate response structure
     tk_llm_response_t* response = calloc(1, sizeof(tk_llm_response_t));
     if (!response) {
+        cJSON_Delete(json);
         return TK_ERROR_OUT_OF_MEMORY;
     }
     
-    // Copy response text
-    response->response_text = strdup(text);
-    if (!response->response_text) {
+    // Get response_text
+    cJSON* response_text_json = cJSON_GetObjectItemCaseSensitive(json, "response_text");
+    if (cJSON_IsString(response_text_json) && response_text_json->valuestring) {
+        response->response_text = strdup(response_text_json->valuestring);
+        if (!response->response_text) {
+            free(response);
+            cJSON_Delete(json);
+            return TK_ERROR_OUT_OF_MEMORY;
+        }
+    } else {
+        // If no response_text, use empty string
+        response->response_text = strdup("");
+        if (!response->response_text) {
+            free(response);
+            cJSON_Delete(json);
+            return TK_ERROR_OUT_OF_MEMORY;
+        }
+    }
+    
+    // Get priority
+    cJSON* priority_json = cJSON_GetObjectItemCaseSensitive(json, "priority");
+    if (cJSON_IsString(priority_json) && priority_json->valuestring) {
+        if (strcmp(priority_json->valuestring, "high") == 0) {
+            response->priority = TK_RESPONSE_PRIORITY_HIGH;
+        } else if (strcmp(priority_json->valuestring, "critical") == 0) {
+            response->priority = TK_RESPONSE_PRIORITY_CRITICAL;
+        } else {
+            response->priority = TK_RESPONSE_PRIORITY_NORMAL; // Default to normal
+        }
+    } else {
+        response->priority = TK_RESPONSE_PRIORITY_NORMAL; // Default to normal
+    }
+    
+    // Get actions array
+    cJSON* actions_json = cJSON_GetObjectItemCaseSensitive(json, "actions");
+    if (!cJSON_IsArray(actions_json)) {
+        tk_log_error("Invalid or missing 'actions' array in JSON response");
+        free(response->response_text);
         free(response);
-        return TK_ERROR_OUT_OF_MEMORY;
+        cJSON_Delete(json);
+        return TK_ERROR_INVALID_FORMAT;
     }
     
-    response->priority = TK_RESPONSE_PRIORITY_NORMAL;
+    size_t action_count = cJSON_GetArraySize(actions_json);
+    if (action_count == 0) {
+        tk_log_warning("No actions found in LLM response");
+        response->action_count = 0;
+        response->actions = NULL;
+        *out_response = response;
+        cJSON_Delete(json);
+        return TK_SUCCESS;
+    }
     
-    // Create one speak action with the full response
-    response->action_count = 1;
-    response->actions = calloc(1, sizeof(tk_action_params_t));
+    // Allocate actions array
+    response->actions = calloc(action_count, sizeof(tk_action_params_t));
     if (!response->actions) {
         free(response->response_text);
         free(response);
+        cJSON_Delete(json);
         return TK_ERROR_OUT_OF_MEMORY;
     }
     
-    tk_action_params_t* action = &response->actions[0];
-    action->type = TK_ACTION_TYPE_SPEAK;
-    action->confidence = 0.9f; // High confidence for direct responses
-    action->timeout_ms = 10000; // 10 seconds timeout
+    response->action_count = action_count;
     
-    action->params.speak.text = strdup(text);
-    if (!action->params.speak.text) {
-        free(response->actions);
-        free(response->response_text);
-        free(response);
-        return TK_ERROR_OUT_OF_MEMORY;
+    // Parse each action
+    for (size_t i = 0; i < action_count; i++) {
+        cJSON* action_json = cJSON_GetArrayItem(actions_json, i);
+        if (!action_json) {
+            tk_log_error("Failed to get action %zu from array", i);
+            // Clean up already parsed actions
+            for (size_t j = 0; j < i; j++) {
+                free_action_params_resources(&response->actions[j]);
+            }
+            free(response->actions);
+            free(response->response_text);
+            free(response);
+            cJSON_Delete(json);
+            return TK_ERROR_INVALID_FORMAT;
+        }
+        
+        tk_action_params_t* action = &response->actions[i];
+        
+        // Get action type
+        cJSON* type_json = cJSON_GetObjectItemCaseSensitive(action_json, "type");
+        if (!cJSON_IsString(type_json) || !type_json->valuestring) {
+            tk_log_error("Missing or invalid 'type' in action %zu", i);
+            // Clean up already parsed actions
+            for (size_t j = 0; j < i; j++) {
+                free_action_params_resources(&response->actions[j]);
+            }
+            free(response->actions);
+            free(response->response_text);
+            free(response);
+            cJSON_Delete(json);
+            return TK_ERROR_INVALID_FORMAT;
+        }
+        
+        // Map string type to enum
+        if (strcmp(type_json->valuestring, "SPEAK") == 0) {
+            action->type = TK_ACTION_TYPE_SPEAK;
+        } else if (strcmp(type_json->valuestring, "NAVIGATE_GUIDE") == 0) {
+            action->type = TK_ACTION_TYPE_NAVIGATE_GUIDE;
+        } else if (strcmp(type_json->valuestring, "NAVIGATE_WARN") == 0) {
+            action->type = TK_ACTION_TYPE_NAVIGATE_WARN;
+        } else if (strcmp(type_json->valuestring, "DESCRIBE_OBJECT") == 0) {
+            action->type = TK_ACTION_TYPE_DESCRIBE_OBJECT;
+        } else if (strcmp(type_json->valuestring, "READ_TEXT") == 0) {
+            action->type = TK_ACTION_TYPE_READ_TEXT;
+        } else if (strcmp(type_json->valuestring, "SYSTEM_MODE_CHANGE") == 0) {
+            action->type = TK_ACTION_TYPE_SYSTEM_MODE_CHANGE;
+        } else if (strcmp(type_json->valuestring, "SYSTEM_SETTING") == 0) {
+            action->type = TK_ACTION_TYPE_SYSTEM_SETTING;
+        } else if (strcmp(type_json->valuestring, "USER_QUERY_RESPONSE") == 0) {
+            action->type = TK_ACTION_TYPE_USER_QUERY_RESPONSE;
+        } else if (strcmp(type_json->valuestring, "EMERGENCY_ALERT") == 0) {
+            action->type = TK_ACTION_TYPE_EMERGENCY_ALERT;
+        } else {
+            tk_log_error("Unknown action type '%s' in action %zu", type_json->valuestring, i);
+            // Clean up already parsed actions
+            for (size_t j = 0; j < i; j++) {
+                free_action_params_resources(&response->actions[j]);
+            }
+            free(response->actions);
+            free(response->response_text);
+            free(response);
+            cJSON_Delete(json);
+            return TK_ERROR_INVALID_FORMAT;
+        }
+        
+        // Get confidence
+        cJSON* confidence_json = cJSON_GetObjectItemCaseSensitive(action_json, "confidence");
+        if (cJSON_IsNumber(confidence_json)) {
+            action->confidence = (float)confidence_json->valuedouble;
+        } else {
+            action->confidence = 0.0f; // Default to 0 if not provided
+        }
+        
+        // Get params object
+        cJSON* params_json = cJSON_GetObjectItemCaseSensitive(action_json, "params");
+        if (!cJSON_IsObject(params_json)) {
+            tk_log_error("Missing or invalid 'params' object in action %zu", i);
+            // Clean up already parsed actions
+            for (size_t j = 0; j < i; j++) {
+                free_action_params_resources(&response->actions[j]);
+            }
+            free(response->actions);
+            free(response->response_text);
+            free(response);
+            cJSON_Delete(json);
+            return TK_ERROR_INVALID_FORMAT;
+        }
+        
+        // Parse params based on action type
+        switch (action->type) {
+            case TK_ACTION_TYPE_SPEAK: {
+                cJSON* text_json = cJSON_GetObjectItemCaseSensitive(params_json, "text");
+                if (cJSON_IsString(text_json) && text_json->valuestring) {
+                    action->params.speak.text = strdup(text_json->valuestring);
+                    if (!action->params.speak.text) {
+                        // Clean up already parsed actions
+                        for (size_t j = 0; j < i; j++) {
+                            free_action_params_resources(&response->actions[j]);
+                        }
+                        free(response->actions);
+                        free(response->response_text);
+                        free(response);
+                        cJSON_Delete(json);
+                        return TK_ERROR_OUT_OF_MEMORY;
+                    }
+                } else {
+                    action->params.speak.text = strdup(""); // Default to empty string
+                    if (!action->params.speak.text) {
+                        // Clean up already parsed actions
+                        for (size_t j = 0; j < i; j++) {
+                            free_action_params_resources(&response->actions[j]);
+                        }
+                        free(response->actions);
+                        free(response->response_text);
+                        free(response);
+                        cJSON_Delete(json);
+                        return TK_ERROR_OUT_OF_MEMORY;
+                    }
+                }
+                action->params.speak.priority = TK_RESPONSE_PRIORITY_NORMAL; // Default
+                action->params.speak.volume_multiplier = 1.0f; // Default
+                break;
+            }
+                
+            case TK_ACTION_TYPE_NAVIGATE_GUIDE: {
+                cJSON* instruction_json = cJSON_GetObjectItemCaseSensitive(params_json, "instruction");
+                if (cJSON_IsString(instruction_json) && instruction_json->valuestring) {
+                    action->params.navigate_guide.instruction = strdup(instruction_json->valuestring);
+                    if (!action->params.navigate_guide.instruction) {
+                        // Clean up already parsed actions
+                        for (size_t j = 0; j < i; j++) {
+                            free_action_params_resources(&response->actions[j]);
+                        }
+                        free(response->actions);
+                        free(response->response_text);
+                        free(response);
+                        cJSON_Delete(json);
+                        return TK_ERROR_OUT_OF_MEMORY;
+                    }
+                } else {
+                    action->params.navigate_guide.instruction = strdup(""); // Default to empty string
+                    if (!action->params.navigate_guide.instruction) {
+                        // Clean up already parsed actions
+                        for (size_t j = 0; j < i; j++) {
+                            free_action_params_resources(&response->actions[j]);
+                        }
+                        free(response->actions);
+                        free(response->response_text);
+                        free(response);
+                        cJSON_Delete(json);
+                        return TK_ERROR_OUT_OF_MEMORY;
+                    }
+                }
+                
+                cJSON* direction_json = cJSON_GetObjectItemCaseSensitive(params_json, "direction_deg");
+                if (cJSON_IsNumber(direction_json)) {
+                    action->params.navigate_guide.direction_deg = (float)direction_json->valuedouble;
+                } else {
+                    action->params.navigate_guide.direction_deg = 0.0f; // Default to 0
+                }
+                break;
+            }
+                
+            case TK_ACTION_TYPE_NAVIGATE_WARN: {
+                cJSON* warning_text_json = cJSON_GetObjectItemCaseSensitive(params_json, "warning_text");
+                if (cJSON_IsString(warning_text_json) && warning_text_json->valuestring) {
+                    action->params.navigate_warn.warning_text = strdup(warning_text_json->valuestring);
+                    if (!action->params.navigate_warn.warning_text) {
+                        // Clean up already parsed actions
+                        for (size_t j = 0; j < i; j++) {
+                            free_action_params_resources(&response->actions[j]);
+                        }
+                        free(response->actions);
+                        free(response->response_text);
+                        free(response);
+                        cJSON_Delete(json);
+                        return TK_ERROR_OUT_OF_MEMORY;
+                    }
+                } else {
+                    action->params.navigate_warn.warning_text = strdup(""); // Default to empty string
+                    if (!action->params.navigate_warn.warning_text) {
+                        // Clean up already parsed actions
+                        for (size_t j = 0; j < i; j++) {
+                            free_action_params_resources(&response->actions[j]);
+                        }
+                        free(response->actions);
+                        free(response->response_text);
+                        free(response);
+                        cJSON_Delete(json);
+                        return TK_ERROR_OUT_OF_MEMORY;
+                    }
+                }
+                
+                cJSON* obstacle_id_json = cJSON_GetObjectItemCaseSensitive(params_json, "obstacle_id");
+                if (cJSON_IsNumber(obstacle_id_json)) {
+                    action->params.navigate_warn.obstacle_id = (uint32_t)obstacle_id_json->valueint;
+                } else {
+                    action->params.navigate_warn.obstacle_id = 0; // Default to 0
+                }
+                break;
+            }
+                
+            case TK_ACTION_TYPE_DESCRIBE_OBJECT: {
+                cJSON* object_id_json = cJSON_GetObjectItemCaseSensitive(params_json, "object_id");
+                if (cJSON_IsNumber(object_id_json)) {
+                    action->params.describe_object.object_id = (uint32_t)object_id_json->valueint;
+                } else {
+                    action->params.describe_object.object_id = 0; // Default to 0
+                }
+                
+                cJSON* object_label_json = cJSON_GetObjectItemCaseSensitive(params_json, "object_label");
+                if (cJSON_IsString(object_label_json) && object_label_json->valuestring) {
+                    action->params.describe_object.object_label = strdup(object_label_json->valuestring);
+                    if (!action->params.describe_object.object_label) {
+                        // Clean up already parsed actions
+                        for (size_t j = 0; j < i; j++) {
+                            free_action_params_resources(&response->actions[j]);
+                        }
+                        free(response->actions);
+                        free(response->response_text);
+                        free(response);
+                        cJSON_Delete(json);
+                        return TK_ERROR_OUT_OF_MEMORY;
+                    }
+                } else {
+                    action->params.describe_object.object_label = NULL; // Optional
+                }
+                break;
+            }
+                
+            case TK_ACTION_TYPE_READ_TEXT: {
+                cJSON* text_content_json = cJSON_GetObjectItemCaseSensitive(params_json, "text_content");
+                if (cJSON_IsString(text_content_json) && text_content_json->valuestring) {
+                    action->params.read_text.text_content = strdup(text_content_json->valuestring);
+                    if (!action->params.read_text.text_content) {
+                        // Clean up already parsed actions
+                        for (size_t j = 0; j < i; j++) {
+                            free_action_params_resources(&response->actions[j]);
+                        }
+                        free(response->actions);
+                        free(response->response_text);
+                        free(response);
+                        cJSON_Delete(json);
+                        return TK_ERROR_OUT_OF_MEMORY;
+                    }
+                } else {
+                    action->params.read_text.text_content = strdup(""); // Default to empty string
+                    if (!action->params.read_text.text_content) {
+                        // Clean up already parsed actions
+                        for (size_t j = 0; j < i; j++) {
+                            free_action_params_resources(&response->actions[j]);
+                        }
+                        free(response->actions);
+                        free(response->response_text);
+                        free(response);
+                        cJSON_Delete(json);
+                        return TK_ERROR_OUT_OF_MEMORY;
+                    }
+                }
+                break;
+            }
+                
+            case TK_ACTION_TYPE_SYSTEM_SETTING: {
+                cJSON* setting_name_json = cJSON_GetObjectItemCaseSensitive(params_json, "setting_name");
+                if (cJSON_IsString(setting_name_json) && setting_name_json->valuestring) {
+                    action->params.system_setting.setting_name = strdup(setting_name_json->valuestring);
+                    if (!action->params.system_setting.setting_name) {
+                        // Clean up already parsed actions
+                        for (size_t j = 0; j < i; j++) {
+                            free_action_params_resources(&response->actions[j]);
+                        }
+                        free(response->actions);
+                        free(response->response_text);
+                        free(response);
+                        cJSON_Delete(json);
+                        return TK_ERROR_OUT_OF_MEMORY;
+                    }
+                } else {
+                    action->params.system_setting.setting_name = strdup(""); // Default to empty string
+                    if (!action->params.system_setting.setting_name) {
+                        // Clean up already parsed actions
+                        for (size_t j = 0; j < i; j++) {
+                            free_action_params_resources(&response->actions[j]);
+                        }
+                        free(response->actions);
+                        free(response->response_text);
+                        free(response);
+                        cJSON_Delete(json);
+                        return TK_ERROR_OUT_OF_MEMORY;
+                    }
+                }
+                
+                cJSON* setting_value_json = cJSON_GetObjectItemCaseSensitive(params_json, "setting_value");
+                if (cJSON_IsString(setting_value_json) && setting_value_json->valuestring) {
+                    action->params.system_setting.setting_value = strdup(setting_value_json->valuestring);
+                    if (!action->params.system_setting.setting_value) {
+                        // Clean up already parsed actions and setting_name
+                        free(action->params.system_setting.setting_name);
+                        for (size_t j = 0; j < i; j++) {
+                            free_action_params_resources(&response->actions[j]);
+                        }
+                        free(response->actions);
+                        free(response->response_text);
+                        free(response);
+                        cJSON_Delete(json);
+                        return TK_ERROR_OUT_OF_MEMORY;
+                    }
+                } else {
+                    action->params.system_setting.setting_value = strdup(""); // Default to empty string
+                    if (!action->params.system_setting.setting_value) {
+                        // Clean up already parsed actions and setting_name
+                        free(action->params.system_setting.setting_name);
+                        for (size_t j = 0; j < i; j++) {
+                            free_action_params_resources(&response->actions[j]);
+                        }
+                        free(response->actions);
+                        free(response->response_text);
+                        free(response);
+                        cJSON_Delete(json);
+                        return TK_ERROR_OUT_OF_MEMORY;
+                    }
+                }
+                break;
+            }
+                
+            case TK_ACTION_TYPE_USER_QUERY_RESPONSE: {
+                cJSON* response_text_json = cJSON_GetObjectItemCaseSensitive(params_json, "response_text");
+                if (cJSON_IsString(response_text_json) && response_text_json->valuestring) {
+                    action->params.user_query_response.response_text = strdup(response_text_json->valuestring);
+                    if (!action->params.user_query_response.response_text) {
+                        // Clean up already parsed actions
+                        for (size_t j = 0; j < i; j++) {
+                            free_action_params_resources(&response->actions[j]);
+                        }
+                        free(response->actions);
+                        free(response->response_text);
+                        free(response);
+                        cJSON_Delete(json);
+                        return TK_ERROR_OUT_OF_MEMORY;
+                    }
+                } else {
+                    action->params.user_query_response.response_text = strdup(""); // Default to empty string
+                    if (!action->params.user_query_response.response_text) {
+                        // Clean up already parsed actions
+                        for (size_t j = 0; j < i; j++) {
+                            free_action_params_resources(&response->actions[j]);
+                        }
+                        free(response->actions);
+                        free(response->response_text);
+                        free(response);
+                        cJSON_Delete(json);
+                        return TK_ERROR_OUT_OF_MEMORY;
+                    }
+                }
+                break;
+            }
+                
+            case TK_ACTION_TYPE_EMERGENCY_ALERT: {
+                cJSON* alert_message_json = cJSON_GetObjectItemCaseSensitive(params_json, "alert_message");
+                if (cJSON_IsString(alert_message_json) && alert_message_json->valuestring) {
+                    action->params.emergency_alert.alert_message = strdup(alert_message_json->valuestring);
+                    if (!action->params.emergency_alert.alert_message) {
+                        // Clean up already parsed actions
+                        for (size_t j = 0; j < i; j++) {
+                            free_action_params_resources(&response->actions[j]);
+                        }
+                        free(response->actions);
+                        free(response->response_text);
+                        free(response);
+                        cJSON_Delete(json);
+                        return TK_ERROR_OUT_OF_MEMORY;
+                    }
+                } else {
+                    action->params.emergency_alert.alert_message = strdup(""); // Default to empty string
+                    if (!action->params.emergency_alert.alert_message) {
+                        // Clean up already parsed actions
+                        for (size_t j = 0; j < i; j++) {
+                            free_action_params_resources(&response->actions[j]);
+                        }
+                        free(response->actions);
+                        free(response->response_text);
+                        free(response);
+                        cJSON_Delete(json);
+                        return TK_ERROR_OUT_OF_MEMORY;
+                    }
+                }
+                
+                // Optional parameters
+                cJSON* repeat_alert_json = cJSON_GetObjectItemCaseSensitive(params_json, "repeat_alert");
+                if (cJSON_IsBool(repeat_alert_json)) {
+                    action->params.emergency_alert.repeat_alert = cJSON_IsTrue(repeat_alert_json);
+                } else {
+                    action->params.emergency_alert.repeat_alert = false; // Default
+                }
+                
+                cJSON* repeat_interval_ms_json = cJSON_GetObjectItemCaseSensitive(params_json, "repeat_interval_ms");
+                if (cJSON_IsNumber(repeat_interval_ms_json)) {
+                    action->params.emergency_alert.repeat_interval_ms = (uint32_t)repeat_interval_ms_json->valueint;
+                } else {
+                    action->params.emergency_alert.repeat_interval_ms = 0; // Default
+                }
+                break;
+            }
+                
+            default:
+                // For other action types, no additional params to parse
+                break;
+        }
     }
     
-    action->params.speak.priority = TK_RESPONSE_PRIORITY_NORMAL;
-    action->params.speak.volume_multiplier = 1.0f;
+    // Clean up JSON
+    cJSON_Delete(json);
     
     *out_response = response;
     return TK_SUCCESS;

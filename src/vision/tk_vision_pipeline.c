@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <math.h>
+#include <float.h>
 
 // Assume these headers exist and provide the necessary functionality
 #include "vision/tk_object_detector.h"
@@ -40,6 +41,8 @@ struct tk_vision_pipeline_s {
     // Configuration
     float object_confidence_threshold;
     uint32_t max_detected_objects;
+    float focal_length_x;  // Added: Camera focal length in x direction
+    float focal_length_y;  // Added: Camera focal length in y direction
 };
 
 // Internal helper functions
@@ -68,6 +71,9 @@ TK_NODISCARD tk_error_code_t tk_vision_pipeline_create(tk_vision_pipeline_t** ou
     pipeline->gpu_device_id = config->gpu_device_id;
     pipeline->object_confidence_threshold = config->object_confidence_threshold;
     pipeline->max_detected_objects = config->max_detected_objects;
+    // Initialize camera parameters from config
+    pipeline->focal_length_x = config->focal_length_x;
+    pipeline->focal_length_y = config->focal_length_y;
 
     tk_error_code_t err = load_models(pipeline, config);
     if (err != TK_SUCCESS) {
@@ -76,7 +82,8 @@ TK_NODISCARD tk_error_code_t tk_vision_pipeline_create(tk_vision_pipeline_t** ou
     }
 
     *out_pipeline = pipeline;
-    tk_log_info("Vision pipeline created successfully");
+    tk_log_info("Vision pipeline created successfully with focal lengths: fx=%.2f, fy=%.2f", 
+                pipeline->focal_length_x, pipeline->focal_length_y);
     return TK_SUCCESS;
 }
 
@@ -315,6 +322,8 @@ static tk_error_code_t perform_object_detection(tk_vision_pipeline_t* pipeline, 
                 result->objects[idx].confidence = detection_result->detections[i].confidence;
                 result->objects[idx].bbox = detection_result->detections[i].bbox;
                 result->objects[idx].distance_meters = 0.0f; // Will be populated by fusion
+                result->objects[idx].width_meters = 0.0f;    // Will be populated by fusion
+                result->objects[idx].height_meters = 0.0f;   // Will be populated by fusion
                 idx++;
             }
         }
@@ -385,6 +394,14 @@ static tk_error_code_t perform_ocr(tk_vision_pipeline_t* pipeline, const tk_vide
     return TK_SUCCESS;
 }
 
+/**
+ * @brief Enhanced object-depth fusion with robust distance calculation and size estimation
+ * 
+ * This function implements a more sophisticated approach to fusing object detection
+ * results with depth information:
+ * 1. Calculates robust distance using median/minimum of central pixels instead of single point
+ * 2. Estimates real-world dimensions using camera parameters and triangulation
+ */
 static tk_error_code_t fuse_object_depth(tk_vision_pipeline_t* pipeline, tk_vision_result_t* result, const tk_video_frame_t* frame) {
     if (!result->depth_map || result->object_count == 0) {
         return TK_SUCCESS; // Nothing to fuse
@@ -397,31 +414,122 @@ static tk_error_code_t fuse_object_depth(tk_vision_pipeline_t* pipeline, tk_visi
     uint32_t frame_width = frame->width;
     uint32_t frame_height = frame->height;
 
+    // Camera parameters for size estimation
+    float focal_length_x = pipeline->focal_length_x;
+    float focal_length_y = pipeline->focal_length_y;
+
     for (size_t i = 0; i < result->object_count; ++i) {
         tk_rect_t bbox = result->objects[i].bbox;
         
-        // Calculate center of bounding box
-        int center_x = bbox.x + bbox.w / 2;
-        int center_y = bbox.y + bbox.h / 2;
-
-        // Normalize to depth map coordinates
-        float norm_x = (float)center_x / (float)frame_width;
-        float norm_y = (float)center_y / (float)frame_height;
+        // Normalize bounding box coordinates to depth map space
+        float norm_x_min = (float)bbox.x / (float)frame_width;
+        float norm_y_min = (float)bbox.y / (float)frame_height;
+        float norm_x_max = (float)(bbox.x + bbox.w) / (float)frame_width;
+        float norm_y_max = (float)(bbox.y + bbox.h) / (float)frame_height;
         
         // Map to depth coordinates
-        uint32_t depth_x = (uint32_t)(norm_x * (depth_width - 1));
-        uint32_t depth_y = (uint32_t)(norm_y * (depth_height - 1));
+        uint32_t depth_x_min = (uint32_t)(norm_x_min * (depth_width - 1));
+        uint32_t depth_y_min = (uint32_t)(norm_y_min * (depth_height - 1));
+        uint32_t depth_x_max = (uint32_t)(norm_x_max * (depth_width - 1));
+        uint32_t depth_y_max = (uint32_t)(norm_y_max * (depth_height - 1));
+        
+        // Boundary checks and clamping
+        depth_x_min = (depth_x_min < depth_width) ? depth_x_min : depth_width - 1;
+        depth_y_min = (depth_y_min < depth_height) ? depth_y_min : depth_height - 1;
+        depth_x_max = (depth_x_max < depth_width) ? depth_x_max : depth_width - 1;
+        depth_y_max = (depth_y_max < depth_height) ? depth_y_max : depth_height - 1;
+        
+        if (depth_x_min >= depth_x_max || depth_y_min >= depth_y_max) {
+            result->objects[i].distance_meters = -1.0f;
+            result->objects[i].width_meters = -1.0f;
+            result->objects[i].height_meters = -1.0f;
+            continue;
+        }
 
-        // Boundary check
-        if (depth_x < depth_width && depth_y < depth_height) {
-            size_t index = depth_y * depth_width + depth_x;
-            result->objects[i].distance_meters = depth_data[index];
-        } else {
-            result->objects[i].distance_meters = -1.0f; // Invalid distance
+        // Focus on the central 25% of the bounding box for more robust distance estimation
+        uint32_t center_width = depth_x_max - depth_x_min;
+        uint32_t center_height = depth_y_max - depth_y_min;
+        uint32_t crop_margin_x = center_width / 4;
+        uint32_t crop_margin_y = center_height / 4;
+        
+        uint32_t center_x_min = depth_x_min + crop_margin_x;
+        uint32_t center_y_min = depth_y_min + crop_margin_y;
+        uint32_t center_x_max = depth_x_max - crop_margin_x;
+        uint32_t center_y_max = depth_y_max - crop_margin_y;
+        
+        // Collect valid depth values from the central region
+        float* valid_depths = NULL;
+        size_t valid_count = 0;
+        size_t max_samples = (center_x_max - center_x_min + 1) * (center_y_max - center_y_min + 1);
+        
+        if (max_samples > 0) {
+            valid_depths = (float*)malloc(max_samples * sizeof(float));
+            if (!valid_depths) {
+                result->objects[i].distance_meters = -1.0f;
+                result->objects[i].width_meters = -1.0f;
+                result->objects[i].height_meters = -1.0f;
+                continue;
+            }
+            
+            for (uint32_t y = center_y_min; y <= center_y_max; ++y) {
+                for (uint32_t x = center_x_min; x <= center_x_max; ++x) {
+                    size_t index = y * depth_width + x;
+                    float depth_value = depth_data[index];
+                    
+                    // Only consider valid positive depth values
+                    if (depth_value > 0.0f && depth_value < 100.0f) { // Reasonable depth range
+                        valid_depths[valid_count++] = depth_value;
+                    }
+                }
+            }
         }
         
-        tk_log_debug("Object %zu (%s) at (%d,%d) distance: %.2fm", 
-                    i, result->objects[i].label, center_x, center_y, result->objects[i].distance_meters);
+        // Calculate robust distance (minimum or median of valid depths)
+        float robust_distance = -1.0f;
+        if (valid_count > 0) {
+            // Sort valid depths to find median
+            for (size_t j = 0; j < valid_count - 1; ++j) {
+                for (size_t k = j + 1; k < valid_count; ++k) {
+                    if (valid_depths[j] > valid_depths[k]) {
+                        float temp = valid_depths[j];
+                        valid_depths[j] = valid_depths[k];
+                        valid_depths[k] = temp;
+                    }
+                }
+            }
+            
+            // Use minimum for safety-critical applications, or median for general use
+            // For assistive technology, minimum is often better (closest point)
+            robust_distance = valid_depths[0]; // Minimum distance
+            
+            // Alternative: use median
+            // robust_distance = (valid_count % 2 == 1) ? 
+            //                   valid_depths[valid_count/2] : 
+            //                   (valid_depths[valid_count/2-1] + valid_depths[valid_count/2]) / 2.0f;
+        }
+        
+        result->objects[i].distance_meters = robust_distance;
+        
+        // Estimate real-world dimensions using triangulation
+        if (robust_distance > 0.0f && focal_length_x > 0.0f && focal_length_y > 0.0f) {
+            // Convert pixel dimensions to meters using the triangulation formula:
+            // real_size = (pixel_size * distance) / focal_length
+            result->objects[i].width_meters = (bbox.w * robust_distance) / focal_length_x;
+            result->objects[i].height_meters = (bbox.h * robust_distance) / focal_length_y;
+        } else {
+            result->objects[i].width_meters = -1.0f;
+            result->objects[i].height_meters = -1.0f;
+        }
+        
+        // Clean up temporary array
+        if (valid_depths) {
+            free(valid_depths);
+        }
+        
+        tk_log_debug("Object %zu (%s) at (%d,%d) distance: %.2fm, size: %.2fx%.2fm", 
+                    i, result->objects[i].label, bbox.x, bbox.y, 
+                    result->objects[i].distance_meters,
+                    result->objects[i].width_meters, result->objects[i].height_meters);
     }
 
     return TK_SUCCESS;

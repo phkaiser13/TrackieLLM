@@ -36,6 +36,7 @@
 
 #include "utils/tk_error_handling.h"
 #include "internal_tools/tk_file_manager.h"
+#include "tk_decision_engine.h" // Include for priority enum
 
 // Forward-declare the primary pipeline object as an opaque type.
 typedef struct tk_audio_pipeline_s tk_audio_pipeline_t;
@@ -191,7 +192,7 @@ void tk_audio_pipeline_destroy(tk_audio_pipeline_t** pipeline);
 TK_NODISCARD tk_error_code_t tk_audio_pipeline_process_chunk(tk_audio_pipeline_t* pipeline, const int16_t* audio_chunk, size_t frame_count);
 
 /**
- * @brief Requests the synthesis of a text string into speech.
+ * @brief Requests the synthesis of a text string into speech with priority.
  *
  * This function is non-blocking. It queues a TTS request to be processed by the
  * pipeline's worker thread. The resulting audio will be delivered in chunks
@@ -199,6 +200,7 @@ TK_NODISCARD tk_error_code_t tk_audio_pipeline_process_chunk(tk_audio_pipeline_t
  *
  * @param[in] pipeline The audio pipeline instance.
  * @param[in] text_to_speak The UTF-8 encoded text to be synthesized.
+ * @param[in] priority The priority level for this TTS request.
  *
  * @return TK_SUCCESS if the request was successfully queued.
  * @return TK_ERROR_INVALID_ARGUMENT if pipeline or text_to_speak is NULL.
@@ -207,7 +209,11 @@ TK_NODISCARD tk_error_code_t tk_audio_pipeline_process_chunk(tk_audio_pipeline_t
  * @par Thread-Safety
  * This function is thread-safe.
  */
-TK_NODISCARD tk_error_code_t tk_audio_pipeline_synthesize_text(tk_audio_pipeline_t* pipeline, const char* text_to_speak);
+TK_NODISCARD tk_error_code_t tk_audio_pipeline_synthesize_text(
+    tk_audio_pipeline_t* pipeline, 
+    const char* text_to_speak,
+    tk_response_priority_e priority // Added priority parameter
+);
 
 /**
  * @brief Forces the ASR to finalize its current transcription.

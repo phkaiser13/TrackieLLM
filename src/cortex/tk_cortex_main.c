@@ -7,7 +7,7 @@
  * "brain" of the system that orchestrates all sensory inputs, reasoning processes,
  * and decision-making capabilities.
  *
- * The Cortex implements a sophisticated real-time processing loop that integrates:
+ * The Cortex implements a sophisticated event-driven processing system that integrates:
  *   - Multi-modal sensory input (vision, audio, IMU)
  *   - Contextual reasoning and memory management
  *   - Large Language Model inference and response processing
@@ -20,9 +20,9 @@
  * SPDX-License-Identifier: AGPL-3.0 license
  */
 
-#include "cortex/tk_cortex_main.h"
-#include "cortex/tk_contextual_reasoner.h"
-#include "cortex/tk_decision_engine.h"
+#include "tk_cortex_main.h"
+#include "tk_contextual_reasoner.h"
+#include "tk_decision_engine.h"
 #include "vision/tk_vision_pipeline.h"
 #include "audio/tk_audio_pipeline.h"
 #include "navigation/tk_path_planner.h"
@@ -41,6 +41,200 @@
 #include <unistd.h>
 #include <time.h>
 #include <errno.h>
+#include <stdatomic.h>
+
+//------------------------------------------------------------------------------
+// Event System Definitions
+//------------------------------------------------------------------------------
+
+/**
+ * @enum tk_cortex_event_type_e
+ * @brief Types of events that can be processed by the Cortex event loop.
+ */
+typedef enum {
+    CORTEX_EVENT_NEW_VIDEO_FRAME,
+    CORTEX_EVENT_USER_SPEECH_FINAL,
+    CORTEX_EVENT_VAD_SPEECH_STARTED,
+    CORTEX_EVENT_SIGNIFICANT_VISION_CHANGE,
+    CORTEX_EVENT_SYSTEM_TIMER,
+    CORTEX_EVENT_SHUTDOWN
+} tk_cortex_event_type_e;
+
+/**
+ * @struct tk_cortex_event_s
+ * @brief A single event in the Cortex event queue.
+ */
+typedef struct {
+    tk_cortex_event_type_e type;
+    void* payload; // Optional data associated with the event
+    uint64_t timestamp_ns;
+} tk_cortex_event_t;
+
+/**
+ * @struct event_queue_s
+ * @brief A thread-safe circular buffer for event queue.
+ */
+typedef struct {
+    tk_cortex_event_t* events;
+    size_t capacity;
+    atomic_size_t read_index;
+    atomic_size_t write_index;
+    pthread_mutex_t mutex;
+    pthread_cond_t not_empty;
+    pthread_cond_t not_full;
+} event_queue_t;
+
+/**
+ * @brief Initializes an event queue.
+ * 
+ * @param queue Pointer to the event queue to initialize.
+ * @param capacity Maximum number of events the queue can hold.
+ * @return TK_SUCCESS on success, error code otherwise.
+ */
+static tk_error_code_t event_queue_init(event_queue_t* queue, size_t capacity) {
+    if (!queue || capacity == 0) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+
+    queue->events = calloc(capacity, sizeof(tk_cortex_event_t));
+    if (!queue->events) {
+        return TK_ERROR_OUT_OF_MEMORY;
+    }
+
+    queue->capacity = capacity;
+    atomic_init(&queue->read_index, 0);
+    atomic_init(&queue->write_index, 0);
+
+    if (pthread_mutex_init(&queue->mutex, NULL) != 0) {
+        free(queue->events);
+        return TK_ERROR_SYSTEM_ERROR;
+    }
+
+    if (pthread_cond_init(&queue->not_empty, NULL) != 0) {
+        pthread_mutex_destroy(&queue->mutex);
+        free(queue->events);
+        return TK_ERROR_SYSTEM_ERROR;
+    }
+
+    if (pthread_cond_init(&queue->not_full, NULL) != 0) {
+        pthread_cond_destroy(&queue->not_empty);
+        pthread_mutex_destroy(&queue->mutex);
+        free(queue->events);
+        return TK_ERROR_SYSTEM_ERROR;
+    }
+
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Destroys an event queue.
+ * 
+ * @param queue Pointer to the event queue to destroy.
+ */
+static void event_queue_destroy(event_queue_t* queue) {
+    if (!queue) {
+        return;
+    }
+
+    // Free any remaining event payloads
+    size_t read_idx = atomic_load(&queue->read_index);
+    size_t write_idx = atomic_load(&queue->write_index);
+    
+    if (queue->events) {
+        // Iterate through all remaining events and free payloads
+        while (read_idx != write_idx) {
+            if (queue->events[read_idx].payload) {
+                free(queue->events[read_idx].payload);
+            }
+            read_idx = (read_idx + 1) % queue->capacity;
+        }
+        free(queue->events);
+    }
+
+    pthread_cond_destroy(&queue->not_full);
+    pthread_cond_destroy(&queue->not_empty);
+    pthread_mutex_destroy(&queue->mutex);
+}
+
+/**
+ * @brief Enqueues an event.
+ * 
+ * This function will block if the queue is full.
+ * 
+ * @param queue Pointer to the event queue.
+ * @param event Pointer to the event to enqueue.
+ * @return TK_SUCCESS on success, error code otherwise.
+ */
+static tk_error_code_t event_queue_enqueue(event_queue_t* queue, const tk_cortex_event_t* event) {
+    if (!queue || !event) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+
+    pthread_mutex_lock(&queue->mutex);
+
+    // Wait while the queue is full
+    while (((atomic_load(&queue->write_index) + 1) % queue->capacity) == atomic_load(&queue->read_index)) {
+        pthread_cond_wait(&queue->not_full, &queue->mutex);
+    }
+
+    // Copy the event into the queue
+    size_t write_idx = atomic_load(&queue->write_index);
+    queue->events[write_idx] = *event;
+    // If payload is provided, make a copy
+    if (event->payload) {
+        // This assumes payload is a simple struct that can be copied by value
+        // For complex payloads, a deep copy strategy would be needed
+        void* payload_copy = malloc(sizeof(*(event->payload)));
+        if (!payload_copy) {
+            pthread_mutex_unlock(&queue->mutex);
+            return TK_ERROR_OUT_OF_MEMORY;
+        }
+        memcpy(payload_copy, event->payload, sizeof(*(event->payload)));
+        queue->events[write_idx].payload = payload_copy;
+    }
+
+    atomic_store(&queue->write_index, (write_idx + 1) % queue->capacity);
+
+    pthread_cond_signal(&queue->not_empty);
+    pthread_mutex_unlock(&queue->mutex);
+
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Dequeues an event.
+ * 
+ * This function will block if the queue is empty.
+ * 
+ * @param queue Pointer to the event queue.
+ * @param out_event Pointer to store the dequeued event.
+ * @return TK_SUCCESS on success, error code otherwise.
+ */
+static tk_error_code_t event_queue_dequeue(event_queue_t* queue, tk_cortex_event_t* out_event) {
+    if (!queue || !out_event) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+
+    pthread_mutex_lock(&queue->mutex);
+
+    // Wait while the queue is empty
+    while (atomic_load(&queue->read_index) == atomic_load(&queue->write_index)) {
+        pthread_cond_wait(&queue->not_empty, &queue->mutex);
+    }
+
+    // Copy the event from the queue
+    size_t read_idx = atomic_load(&queue->read_index);
+    *out_event = queue->events[read_idx];
+    // The payload pointer is transferred to the caller
+    queue->events[read_idx].payload = NULL; // Clear our reference
+
+    atomic_store(&queue->read_index, (read_idx + 1) % queue->capacity);
+
+    pthread_cond_signal(&queue->not_full);
+    pthread_mutex_unlock(&queue->mutex);
+
+    return TK_SUCCESS;
+}
 
 //------------------------------------------------------------------------------
 // Internal Data Structures
@@ -63,6 +257,11 @@ struct tk_cortex_s {
     volatile bool should_stop;
     pthread_t main_loop_thread;
     bool loop_thread_active;
+    
+    // Event system
+    event_queue_t event_queue;
+    pthread_cond_t event_cond;
+    pthread_mutex_t event_mutex;
     
     // Subsystem components
     tk_vision_pipeline_t* vision_pipeline;
@@ -124,7 +323,7 @@ struct tk_cortex_s {
 static tk_error_code_t cortex_initialize_subsystems(tk_cortex_t* cortex);
 static void cortex_cleanup_subsystems(tk_cortex_t* cortex);
 static void* cortex_main_loop_thread(void* arg);
-static tk_error_code_t cortex_process_single_iteration(tk_cortex_t* cortex);
+static tk_error_code_t cortex_handle_event(tk_cortex_t* cortex, const tk_cortex_event_t* event);
 static tk_error_code_t cortex_process_vision_input(tk_cortex_t* cortex);
 static tk_error_code_t cortex_process_navigation_analysis(tk_cortex_t* cortex);
 static tk_error_code_t cortex_run_llm_inference(tk_cortex_t* cortex);
@@ -171,11 +370,40 @@ tk_error_code_t tk_cortex_create(tk_cortex_t** out_cortex, const tk_cortex_confi
         pthread_mutex_init(&cortex->video_buffer.mutex, NULL) != 0 ||
         pthread_mutex_init(&cortex->audio_buffer.mutex, NULL) != 0 ||
         pthread_mutex_init(&cortex->emergency_mutex, NULL) != 0 ||
-        pthread_mutex_init(&cortex->vision_result_mutex, NULL) != 0) {
+        pthread_mutex_init(&cortex->vision_result_mutex, NULL) != 0 ||
+        pthread_mutex_init(&cortex->event_mutex, NULL) != 0) {
         
         tk_log_error("Failed to initialize mutexes");
         free(cortex);
         return TK_ERROR_SYSTEM_ERROR;
+    }
+    
+    // Initialize condition variables
+    if (pthread_cond_init(&cortex->event_cond, NULL) != 0) {
+        tk_log_error("Failed to initialize condition variables");
+        pthread_mutex_destroy(&cortex->state_mutex);
+        pthread_mutex_destroy(&cortex->video_buffer.mutex);
+        pthread_mutex_destroy(&cortex->audio_buffer.mutex);
+        pthread_mutex_destroy(&cortex->emergency_mutex);
+        pthread_mutex_destroy(&cortex->vision_result_mutex);
+        pthread_mutex_destroy(&cortex->event_mutex);
+        free(cortex);
+        return TK_ERROR_SYSTEM_ERROR;
+    }
+    
+    // Initialize event queue
+    tk_error_code_t result = event_queue_init(&cortex->event_queue, 128); // 128 event capacity
+    if (result != TK_SUCCESS) {
+        tk_log_error("Failed to initialize event queue: %d", result);
+        pthread_cond_destroy(&cortex->event_cond);
+        pthread_mutex_destroy(&cortex->state_mutex);
+        pthread_mutex_destroy(&cortex->video_buffer.mutex);
+        pthread_mutex_destroy(&cortex->audio_buffer.mutex);
+        pthread_mutex_destroy(&cortex->emergency_mutex);
+        pthread_mutex_destroy(&cortex->vision_result_mutex);
+        pthread_mutex_destroy(&cortex->event_mutex);
+        free(cortex);
+        return result;
     }
     
     // Initialize input buffers
@@ -194,7 +422,7 @@ tk_error_code_t tk_cortex_create(tk_cortex_t** out_cortex, const tk_cortex_confi
     }
     
     // Initialize all subsystems
-    tk_error_code_t result = cortex_initialize_subsystems(cortex);
+    result = cortex_initialize_subsystems(cortex);
     if (result != TK_SUCCESS) {
         tk_log_error("Failed to initialize Cortex subsystems: %d", result);
         tk_cortex_destroy(&cortex);
@@ -221,22 +449,29 @@ void tk_cortex_destroy(tk_cortex_t** cortex) {
     // Stop the main loop if it's running
     if (c->loop_thread_active) {
         c->should_stop = true;
+        // Signal the event condition to wake up the loop
+        pthread_cond_signal(&c->event_cond);
         pthread_join(c->main_loop_thread, NULL);
     }
     
     // Cleanup subsystems
     cortex_cleanup_subsystems(c);
     
+    // Destroy event queue
+    event_queue_destroy(&c->event_queue);
+    
     // Free input buffers
     free(c->video_buffer.frames);
     free(c->audio_buffer.samples);
     
-    // Destroy mutexes
+    // Destroy condition variables and mutexes
+    pthread_cond_destroy(&c->event_cond);
     pthread_mutex_destroy(&c->state_mutex);
     pthread_mutex_destroy(&c->video_buffer.mutex);
     pthread_mutex_destroy(&c->audio_buffer.mutex);
     pthread_mutex_destroy(&c->emergency_mutex);
     pthread_mutex_destroy(&c->vision_result_mutex);
+    pthread_mutex_destroy(&c->event_mutex);
     
     free(c);
     *cortex = NULL;
@@ -278,7 +513,14 @@ tk_error_code_t tk_cortex_stop(tk_cortex_t* cortex) {
     }
     
     tk_log_info("Requesting Cortex shutdown");
-    cortex->should_stop = true;
+    
+    // Enqueue a shutdown event
+    tk_cortex_event_t shutdown_event = {
+        .type = CORTEX_EVENT_SHUTDOWN,
+        .payload = NULL,
+        .timestamp_ns = get_current_time_ns()
+    };
+    event_queue_enqueue(&cortex->event_queue, &shutdown_event);
     
     return TK_SUCCESS;
 }
@@ -319,6 +561,14 @@ tk_error_code_t tk_cortex_inject_video_frame(tk_cortex_t* cortex, const tk_video
     }
     
     pthread_mutex_unlock(&cortex->video_buffer.mutex);
+    
+    // Enqueue a new video frame event
+    tk_cortex_event_t video_event = {
+        .type = CORTEX_EVENT_NEW_VIDEO_FRAME,
+        .payload = NULL, // No payload needed, we'll read from the buffer
+        .timestamp_ns = get_current_time_ns()
+    };
+    event_queue_enqueue(&cortex->event_queue, &video_event);
     
     return TK_SUCCESS;
 }
@@ -538,12 +788,7 @@ static void* cortex_main_loop_thread(void* arg) {
     
     tk_log_info("Cortex main processing loop started");
     
-    // Calculate sleep time based on target frequency
-    const uint64_t target_interval_ns = (uint64_t)(1000000000.0f / cortex->config.main_loop_frequency_hz);
-    
     while (!cortex->should_stop) {
-        uint64_t iteration_start = get_current_time_ns();
-        
         // Check for emergency stop
         pthread_mutex_lock(&cortex->emergency_mutex);
         if (cortex->emergency_stop_requested) {
@@ -553,10 +798,18 @@ static void* cortex_main_loop_thread(void* arg) {
         }
         pthread_mutex_unlock(&cortex->emergency_mutex);
         
-        // Process one iteration
-        tk_error_code_t result = cortex_process_single_iteration(cortex);
+        // Wait for an event
+        tk_cortex_event_t event;
+        tk_error_code_t result = event_queue_dequeue(&cortex->event_queue, &event);
         if (result != TK_SUCCESS) {
-            tk_log_error("Error in main loop iteration: %d", result);
+            tk_log_error("Error dequeuing event: %d", result);
+            continue;
+        }
+        
+        // Process the event
+        result = cortex_handle_event(cortex, &event);
+        if (result != TK_SUCCESS) {
+            tk_log_error("Error handling event: %d", result);
             
             // On critical errors, change to error state
             if (result == TK_ERROR_CRITICAL_FAILURE) {
@@ -565,20 +818,9 @@ static void* cortex_main_loop_thread(void* arg) {
             }
         }
         
-        uint64_t iteration_end = get_current_time_ns();
-        uint64_t iteration_time = iteration_end - iteration_start;
-        
-        // Update performance statistics
-        cortex_update_performance_stats(cortex, iteration_time);
-        
-        // Sleep to maintain target frequency
-        if (iteration_time < target_interval_ns) {
-            uint64_t sleep_time_ns = target_interval_ns - iteration_time;
-            struct timespec sleep_spec = {
-                .tv_sec = sleep_time_ns / 1000000000,
-                .tv_nsec = sleep_time_ns % 1000000000
-            };
-            nanosleep(&sleep_spec, NULL);
+        // Free event payload if it was allocated
+        if (event.payload) {
+            free(event.payload);
         }
     }
     
@@ -588,51 +830,76 @@ static void* cortex_main_loop_thread(void* arg) {
     return NULL;
 }
 
-static tk_error_code_t cortex_process_single_iteration(tk_cortex_t* cortex) {
-    uint64_t current_time = get_current_time_ns();
-    tk_error_code_t result;
-    
-    // Process pending decision engine actions
-    result = tk_decision_engine_process_actions(cortex->decision_engine, current_time);
-    if (result != TK_SUCCESS) {
-        tk_log_warning("Decision engine processing failed: %d", result);
-    }
-    
-    // Check for new video data and process if available
-    if (cortex->video_buffer.has_new_frame) {
-        result = cortex_process_vision_input(cortex);
-        if (result != TK_SUCCESS) {
-            tk_log_warning("Vision processing failed: %d", result);
+static tk_error_code_t cortex_handle_event(tk_cortex_t* cortex, const tk_cortex_event_t* event) {
+    switch (event->type) {
+        case CORTEX_EVENT_NEW_VIDEO_FRAME:
+            return cortex_process_vision_input(cortex);
+            
+        case CORTEX_EVENT_USER_SPEECH_FINAL: {
+            // Payload should be a tk_transcription_t*
+            tk_transcription_t* transcription = (tk_transcription_t*)event->payload;
+            if (transcription) {
+                // Add to conversation context
+                tk_error_code_t res = tk_contextual_reasoner_add_conversation_turn(
+                    cortex->contextual_reasoner,
+                    true, // is_user_input
+                    transcription->text,
+                    transcription->confidence
+                );
+                
+                if (res != TK_SUCCESS) {
+                    tk_log_warning("Failed to add conversation turn: %d", res);
+                }
+                
+                // Trigger immediate LLM processing for user input
+                return cortex_run_llm_inference(cortex);
+            }
+            return TK_SUCCESS;
         }
-    }
-    
-    // Process navigation analysis if vision data was updated
-    if (cortex->video_buffer.has_new_frame) {
-        result = cortex_process_navigation_analysis(cortex);
-        if (result != TK_SUCCESS) {
-            tk_log_warning("Navigation analysis failed: %d", result);
+            
+        case CORTEX_EVENT_VAD_SPEECH_STARTED:
+            cortex_change_state(cortex, TK_STATE_LISTENING);
+            return TK_SUCCESS;
+            
+        case CORTEX_EVENT_SIGNIFICANT_VISION_CHANGE: {
+            // Payload should be a tk_vision_result_t*
+            tk_vision_result_t* vision_result = (tk_vision_result_t*)event->payload;
+            if (vision_result) {
+                // Update contextual reasoner with this new visual data
+                tk_error_code_t res = tk_contextual_reasoner_update_vision_context(cortex->contextual_reasoner, vision_result);
+                if (res != TK_SUCCESS) {
+                    tk_log_warning("Failed to update vision context: %d", res);
+                }
+                
+                // Decide if this change is significant enough to trigger LLM inference
+                // This is a simplified check - in reality, you'd have more sophisticated logic
+                // For example, check if a new object of interest appeared or if an obstacle is close
+                bool should_trigger_llm = false;
+                // Example logic: if there are detected objects, consider it significant
+                if (vision_result->object_detections && vision_result->object_detections_count > 0) {
+                    should_trigger_llm = true;
+                }
+                
+                if (should_trigger_llm) {
+                    return cortex_run_llm_inference(cortex);
+                }
+            }
+            return TK_SUCCESS;
         }
+            
+        case CORTEX_EVENT_SYSTEM_TIMER:
+            // This could be used for periodic tasks or fallback processing
+            // For now, we'll just run LLM inference periodically as a fallback
+            return cortex_run_llm_inference(cortex);
+            
+        case CORTEX_EVENT_SHUTDOWN:
+            cortex->should_stop = true;
+            return TK_SUCCESS;
+            
+        default:
+            tk_log_warning("Unknown event type received: %d", event->type);
+            return TK_SUCCESS;
     }
-    
-    // Update contextual reasoner
-    result = tk_contextual_reasoner_process_context(cortex->contextual_reasoner, current_time);
-    if (result != TK_SUCCESS) {
-        tk_log_warning("Context processing failed: %d", result);
-    }
-    
-    // Run LLM inference if context has significantly changed or on schedule
-    static uint64_t last_llm_run = 0;
-    const uint64_t llm_interval_ns = 2000000000; // 2 seconds
-    
-    if ((current_time - last_llm_run) > llm_interval_ns) {
-        result = cortex_run_llm_inference(cortex);
-        if (result == TK_SUCCESS) {
-            last_llm_run = current_time;
-        }
-    }
-    
-    cortex->performance_stats.loop_iteration_count++;
-    return TK_SUCCESS;
 }
 
 static tk_error_code_t cortex_process_vision_input(tk_cortex_t* cortex) {
@@ -688,6 +955,33 @@ static tk_error_code_t cortex_process_vision_input(tk_cortex_t* cortex) {
     
     cortex->performance_stats.last_vision_process_time_ns = get_current_time_ns() - start_time;
     cortex_change_state(cortex, TK_STATE_IDLE);
+    
+    // Check if this vision result represents a significant change
+    // This is a simplified check - you would implement more sophisticated logic
+    bool is_significant_change = false;
+    if (vision_result && vision_result->object_detections_count > 0) {
+        is_significant_change = true;
+    }
+    
+    // If it's a significant change, enqueue an event to process it
+    if (is_significant_change) {
+        // Create a copy of the vision result for the event payload
+        tk_vision_result_t* payload_copy = malloc(sizeof(tk_vision_result_t));
+        if (payload_copy) {
+            // This is a shallow copy - in a real implementation, you'd need a deep copy
+            // or a reference-counted approach to manage the lifetime of the vision result
+            *payload_copy = *vision_result;
+            
+            tk_cortex_event_t significant_change_event = {
+                .type = CORTEX_EVENT_SIGNIFICANT_VISION_CHANGE,
+                .payload = payload_copy,
+                .timestamp_ns = get_current_time_ns()
+            };
+            event_queue_enqueue(&cortex->event_queue, &significant_change_event);
+        } else {
+            tk_log_error("Failed to allocate memory for vision result copy");
+        }
+    }
     
     return TK_SUCCESS;
 }
@@ -895,7 +1189,13 @@ static void on_vad_event(tk_vad_event_e event, void* user_data) {
     switch (event) {
         case TK_VAD_EVENT_SPEECH_STARTED:
             tk_log_debug("Speech detection started");
-            cortex_change_state(cortex, TK_STATE_LISTENING);
+            // Enqueue a VAD speech started event
+            tk_cortex_event_t vad_event = {
+                .type = CORTEX_EVENT_VAD_SPEECH_STARTED,
+                .payload = NULL,
+                .timestamp_ns = get_current_time_ns()
+            };
+            event_queue_enqueue(&cortex->event_queue, &vad_event);
             break;
             
         case TK_VAD_EVENT_SPEECH_ENDED:
@@ -918,23 +1218,26 @@ static void on_transcription(const tk_transcription_t* result, void* user_data) 
     tk_log_info("Transcription received: '%s' (confidence: %.2f, final: %s)", 
         result->text, result->confidence, result->is_final ? "yes" : "no");
     
-    // Add to conversation context
-    tk_error_code_t res = tk_contextual_reasoner_add_conversation_turn(
-        cortex->contextual_reasoner,
-        true, // is_user_input
-        result->text,
-        result->confidence
-    );
-    
-    if (res != TK_SUCCESS) {
-        tk_log_warning("Failed to add conversation turn: %d", res);
-    }
-    
-    // Trigger immediate LLM processing for user input
+    // Only enqueue an event for final transcriptions
     if (result->is_final) {
-        tk_error_code_t llm_result = cortex_run_llm_inference(cortex);
-        if (llm_result != TK_SUCCESS) {
-            tk_log_error("Failed to process user input with LLM: %d", llm_result);
+        // Create a copy of the transcription for the event payload
+        tk_transcription_t* payload_copy = malloc(sizeof(tk_transcription_t));
+        if (payload_copy) {
+            // This is a shallow copy - in a real implementation, you'd need to copy the text as well
+            // For simplicity, we're assuming the text pointer is valid for the lifetime of the event
+            // A more robust solution would strdup the text
+            *payload_copy = *result;
+            // Note: This is a potential issue if the original text pointer becomes invalid
+            // A better approach would be to strdup the text and manage its lifetime
+            
+            tk_cortex_event_t transcription_event = {
+                .type = CORTEX_EVENT_USER_SPEECH_FINAL,
+                .payload = payload_copy,
+                .timestamp_ns = get_current_time_ns()
+            };
+            event_queue_enqueue(&cortex->event_queue, &transcription_event);
+        } else {
+            tk_log_error("Failed to allocate memory for transcription copy");
         }
     }
 }

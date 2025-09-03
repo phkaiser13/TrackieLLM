@@ -23,6 +23,7 @@
  */
 
 #include "tk_audio_pipeline.h"
+#include "tk_decision_engine.h" // Include for priority enum
 
 #include <assert.h>
 #include <stdlib.h>
@@ -48,10 +49,11 @@
 
 /**
  * @struct tk_tts_request_queue_item_t
- * @brief Represents a queued TTS request
+ * @brief Represents a queued TTS request with priority
  */
 typedef struct {
     char* text;
+    tk_response_priority_e priority; // Added priority field
     bool  is_processing;
 } tk_tts_request_queue_item_t;
 
@@ -89,11 +91,15 @@ struct tk_audio_pipeline_s {
     size_t                     asr_audio_buffer_size;
     size_t                     asr_audio_buffer_capacity;
 
-    // TTS queue
+    // TTS queue with priority
     tk_tts_request_queue_item_t tts_queue[TK_AUDIO_PIPELINE_MAX_TTS_QUEUE_SIZE];
     size_t                     tts_queue_head;
     size_t                     tts_queue_tail;
     size_t                     tts_queue_size;
+
+    // TTS interruption control
+    atomic_bool                tts_interrupt_requested;
+    tk_tts_request_queue_item_t* current_tts_item; // Currently processing item
 
     // Threading and synchronization
     thrd_t                     worker_thread;
@@ -113,8 +119,10 @@ static tk_error_code_t process_tts(tk_audio_pipeline_t* pipeline, const char* te
 static void reset_asr_state(tk_audio_pipeline_t* pipeline);
 static void vad_event_callback(tk_vad_silero_event_e event, void* user_data);
 static void tts_audio_callback(const tk_tts_piper_audio_chunk_t* chunk, void* user_data);
-static tk_error_code_t enqueue_tts_request(tk_audio_pipeline_t* pipeline, const char* text);
+static tk_error_code_t enqueue_tts_request_with_priority(tk_audio_pipeline_t* pipeline, const char* text, tk_response_priority_e priority);
 static tk_error_code_t process_next_tts_request(tk_audio_pipeline_t* pipeline);
+static void interrupt_current_tts(tk_audio_pipeline_t* pipeline);
+static int get_priority_value(tk_response_priority_e priority);
 
 //------------------------------------------------------------------------------
 // Pipeline Lifecycle Management
@@ -158,6 +166,10 @@ TK_NODISCARD tk_error_code_t tk_audio_pipeline_create(
         return TK_ERROR_OUT_OF_MEMORY;
     }
     pipeline->asr_audio_buffer_size = 0;
+
+    // Initialize interruption control
+    atomic_store(&pipeline->tts_interrupt_requested, false);
+    pipeline->current_tts_item = NULL;
 
     // Initialize models
     // Load Silero VAD model
@@ -359,14 +371,15 @@ TK_NODISCARD tk_error_code_t tk_audio_pipeline_process_chunk(
 
 TK_NODISCARD tk_error_code_t tk_audio_pipeline_synthesize_text(
     tk_audio_pipeline_t* pipeline, 
-    const char* text_to_speak
+    const char* text_to_speak,
+    tk_response_priority_e priority // Added priority parameter
 ) {
     if (!pipeline || !text_to_speak) {
         return TK_ERROR_INVALID_ARGUMENT;
     }
 
-    // Queue TTS request for worker thread
-    return enqueue_tts_request(pipeline, text_to_speak);
+    // Queue TTS request with priority for worker thread
+    return enqueue_tts_request_with_priority(pipeline, text_to_speak, priority);
 }
 
 TK_NODISCARD tk_error_code_t tk_audio_pipeline_force_transcription_end(
@@ -638,6 +651,12 @@ static void tts_audio_callback(const tk_tts_piper_audio_chunk_t* chunk, void* us
     
     if (!pipeline || !chunk) return;
     
+    // Check if interruption was requested
+    if (atomic_load(&pipeline->tts_interrupt_requested)) {
+        // Skip this chunk if interruption is requested
+        return;
+    }
+    
     // Notify callback with synthesized audio
     if (pipeline->callbacks.on_tts_audio_ready) {
         pipeline->callbacks.on_tts_audio_ready(
@@ -649,7 +668,27 @@ static void tts_audio_callback(const tk_tts_piper_audio_chunk_t* chunk, void* us
     }
 }
 
-static tk_error_code_t enqueue_tts_request(tk_audio_pipeline_t* pipeline, const char* text) {
+/**
+ * @brief Get numeric value for priority (higher number = higher priority)
+ */
+static int get_priority_value(tk_response_priority_e priority) {
+    switch (priority) {
+        case TK_RESPONSE_PRIORITY_CRITICAL: return 4;
+        case TK_RESPONSE_PRIORITY_HIGH:    return 3;
+        case TK_RESPONSE_PRIORITY_NORMAL:  return 2;
+        case TK_RESPONSE_PRIORITY_LOW:     return 1;
+        default:                           return 0;
+    }
+}
+
+/**
+ * @brief Enqueue TTS request with priority-based insertion
+ */
+static tk_error_code_t enqueue_tts_request_with_priority(
+    tk_audio_pipeline_t* pipeline, 
+    const char* text, 
+    tk_response_priority_e priority
+) {
     if (!pipeline || !text) {
         return TK_ERROR_INVALID_ARGUMENT;
     }
@@ -673,11 +712,80 @@ static tk_error_code_t enqueue_tts_request(tk_audio_pipeline_t* pipeline, const 
     }
     strcpy(text_copy, text);
     
-    // Add to queue
-    pipeline->tts_queue[pipeline->tts_queue_tail].text = text_copy;
-    pipeline->tts_queue[pipeline->tts_queue_tail].is_processing = false;
-    pipeline->tts_queue_tail = (pipeline->tts_queue_tail + 1) % TK_AUDIO_PIPELINE_MAX_TTS_QUEUE_SIZE;
+    // Find the correct position based on priority
+    size_t insert_position = pipeline->tts_queue_tail;
+    int new_priority_value = get_priority_value(priority);
+    
+    // If queue is not empty, find the correct insertion point
+    if (pipeline->tts_queue_size > 0) {
+        // Start from head and find where to insert
+        size_t current_pos = pipeline->tts_queue_head;
+        bool inserted = false;
+        
+        for (size_t i = 0; i < pipeline->tts_queue_size; i++) {
+            int current_priority_value = get_priority_value(pipeline->tts_queue[current_pos].priority);
+            
+            // If new item has higher priority, insert here
+            if (new_priority_value > current_priority_value) {
+                insert_position = current_pos;
+                inserted = true;
+                break;
+            }
+            
+            current_pos = (current_pos + 1) % TK_AUDIO_PIPELINE_MAX_TTS_QUEUE_SIZE;
+        }
+        
+        // If not inserted, it goes at the end (lower priority than all existing)
+        if (!inserted) {
+            insert_position = (pipeline->tts_queue_head + pipeline->tts_queue_size) % TK_AUDIO_PIPELINE_MAX_TTS_QUEUE_SIZE;
+        }
+    } else {
+        // Queue is empty, insert at head
+        insert_position = pipeline->tts_queue_head;
+    }
+    
+    // Shift items to make space if needed
+    if (insert_position != pipeline->tts_queue_tail) {
+        // Need to shift items
+        size_t shift_pos = (pipeline->tts_queue_head + pipeline->tts_queue_size) % TK_AUDIO_PIPELINE_MAX_TTS_QUEUE_SIZE;
+        while (shift_pos != insert_position) {
+            size_t prev_pos = (shift_pos == 0) ? 
+                (TK_AUDIO_PIPELINE_MAX_TTS_QUEUE_SIZE - 1) : (shift_pos - 1);
+            pipeline->tts_queue[shift_pos] = pipeline->tts_queue[prev_pos];
+            shift_pos = prev_pos;
+        }
+    }
+    
+    // Insert the new item
+    pipeline->tts_queue[insert_position].text = text_copy;
+    pipeline->tts_queue[insert_position].priority = priority;
+    pipeline->tts_queue[insert_position].is_processing = false;
+    
+    // Update queue pointers and size
+    if (pipeline->tts_queue_size == 0) {
+        // First item
+        pipeline->tts_queue_head = insert_position;
+        pipeline->tts_queue_tail = (insert_position + 1) % TK_AUDIO_PIPELINE_MAX_TTS_QUEUE_SIZE;
+    } else if (insert_position == pipeline->tts_queue_head) {
+        // Inserted at head
+        pipeline->tts_queue_head = (pipeline->tts_queue_head == 0) ? 
+            (TK_AUDIO_PIPELINE_MAX_TTS_QUEUE_SIZE - 1) : (pipeline->tts_queue_head - 1);
+    } else if (insert_position == pipeline->tts_queue_tail) {
+        // Inserted at tail
+        pipeline->tts_queue_tail = (pipeline->tts_queue_tail + 1) % TK_AUDIO_PIPELINE_MAX_TTS_QUEUE_SIZE;
+    }
+    
     pipeline->tts_queue_size++;
+    
+    // Check if we need to interrupt current TTS processing
+    if (pipeline->current_tts_item && 
+        get_priority_value(priority) > get_priority_value(pipeline->current_tts_item->priority)) {
+        // New request has higher priority than current processing
+        // Check if current is low/normal priority
+        if (get_priority_value(pipeline->current_tts_item->priority) <= 2) { // LOW or NORMAL
+            interrupt_current_tts(pipeline);
+        }
+    }
     
     // Unlock mutex
     mtx_unlock(&pipeline->worker_mutex);
@@ -688,12 +796,23 @@ static tk_error_code_t enqueue_tts_request(tk_audio_pipeline_t* pipeline, const 
     return TK_SUCCESS;
 }
 
+/**
+ * @brief Interrupt current TTS processing
+ */
+static void interrupt_current_tts(tk_audio_pipeline_t* pipeline) {
+    // Set interruption flag
+    atomic_store(&pipeline->tts_interrupt_requested, true);
+    
+    // If Piper supports interruption, call it here
+    // tk_tts_piper_interrupt(pipeline->piper_context);
+}
+
 static tk_error_code_t process_next_tts_request(tk_audio_pipeline_t* pipeline) {
     if (!pipeline || pipeline->tts_queue_size == 0) {
         return TK_SUCCESS;
     }
     
-    // Get the next TTS request
+    // Get the next TTS request (highest priority is at head)
     tk_tts_request_queue_item_t* item = &pipeline->tts_queue[pipeline->tts_queue_head];
     
     // If already processing, skip
@@ -701,17 +820,24 @@ static tk_error_code_t process_next_tts_request(tk_audio_pipeline_t* pipeline) {
         return TK_SUCCESS;
     }
     
-    // Mark as processing
+    // Mark as processing and store reference
     item->is_processing = true;
+    pipeline->current_tts_item = item;
+    
+    // Clear interruption flag before starting
+    atomic_store(&pipeline->tts_interrupt_requested, false);
     
     // Process TTS
     tk_error_code_t result = process_tts(pipeline, item->text);
     
-    // Remove from queue
+    // Remove from queue regardless of success/failure
     free(item->text);
     item->text = NULL;
     pipeline->tts_queue_head = (pipeline->tts_queue_head + 1) % TK_AUDIO_PIPELINE_MAX_TTS_QUEUE_SIZE;
     pipeline->tts_queue_size--;
+    
+    // Clear current item reference
+    pipeline->current_tts_item = NULL;
     
     return result;
 }

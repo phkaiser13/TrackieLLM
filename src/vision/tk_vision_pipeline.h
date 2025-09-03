@@ -97,6 +97,8 @@ typedef struct {
     tk_path_t*          tesseract_data_path;/**< Path to the Tesseract 'tessdata' directory. */
     float               object_confidence_threshold; /**< Minimum confidence to report a detected object (0.0 to 1.0). */
     uint32_t            max_detected_objects; /**< Maximum number of objects to report per frame. */
+    float               focal_length_x;     /**< Camera focal length in x direction (pixels). */
+    float               focal_length_y;     /**< Camera focal length in y direction (pixels). */
 } tk_vision_pipeline_config_t;
 
 /**
@@ -119,7 +121,9 @@ typedef struct {
     const char* label;          /**< The human-readable string label for the class. */
     float       confidence;     /**< The model's confidence in the detection (0.0 to 1.0). */
     tk_rect_t   bbox;           /**< The bounding box of the object in pixel coordinates. */
-    float       distance_meters;/**< The estimated distance to the object's center in meters. Populated by fusion. */
+    float       distance_meters;/**< The estimated distance to the object in meters. Populated by fusion. */
+    float       width_meters;   /**< The estimated width of the object in meters. Populated by fusion. */
+    float       height_meters;  /**< The estimated height of the object in meters. Populated by fusion. */
 } tk_vision_object_t;
 
 /**
