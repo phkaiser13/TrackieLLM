@@ -20,11 +20,14 @@
 * SPDX-License-Identifier: AGPL-3.0 license
 */
 
+#define _DEFAULT_SOURCE
 #include "tk_file_manager.h"
 
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+#include <unistd.h>
 
 // Platform-specific includes
 #ifdef _WIN32
@@ -111,7 +114,7 @@ static TK_NODISCARD tk_error_code_t resolve_base_path(tk_base_path_e base, char*
     if (csidl != -1 && SHGetFolderPathA(NULL, csidl, NULL, 0, path_buffer) != S_OK) return TK_ERROR_NOT_FOUND;
 #else
     const char* home_dir = getenv("HOME");
-    if (!home_dir) return TK_ERROR_NOT_FOUND;
+    if (!home_dir) return TK_ERROR_FILE_NOT_FOUND;
     switch (base) {
         case TK_BASE_PATH_APP_CONFIG:
             snprintf(path_buffer, sizeof(path_buffer), "%s/.config", home_dir);
@@ -120,12 +123,14 @@ static TK_NODISCARD tk_error_code_t resolve_base_path(tk_base_path_e base, char*
             snprintf(path_buffer, sizeof(path_buffer), "%s/.cache", home_dir);
             break;
         case TK_BASE_PATH_EXECUTABLE_DIR:
-            ssize_t len = readlink("/proc/self/exe", path_buffer, sizeof(path_buffer) - 1);
-            if (len != -1) {
-                path_buffer[len] = '\0';
-                char* last_sep = strrchr(path_buffer, '/');
-                if (last_sep) *last_sep = '\0';
-            } else return TK_ERROR_UNKNOWN;
+            {
+                ssize_t len = readlink("/proc/self/exe", path_buffer, sizeof(path_buffer) - 1);
+                if (len != -1) {
+                    path_buffer[len] = '\0';
+                    char* last_sep = strrchr(path_buffer, '/');
+                    if (last_sep) *last_sep = '\0';
+                } else return TK_ERROR_UNKNOWN;
+            }
             break;
         case TK_BASE_PATH_WORKING_DIR:
             if (getcwd(path_buffer, sizeof(path_buffer)) == NULL) return TK_ERROR_UNKNOWN;
@@ -237,7 +242,7 @@ TK_NODISCARD tk_error_code_t tk_path_canonicalize(tk_path_t** out_canonical_path
         const char* segment_end = strchr(segment_start, PLATFORM_SEPARATOR);
         if (!segment_end) segment_end = input_end;
 
-        size_t segment_len = segment_end - segment_start;
+        size_t segment_len = (size_t)(segment_end - segment_start);
 
         if (segment_len == 0 || (segment_len == 1 && *segment_start == '.')) {
             // Ignore empty segments ('//') or '.' segments

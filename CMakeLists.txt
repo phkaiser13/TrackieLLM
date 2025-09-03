@@ -19,8 +19,12 @@ cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
 project(TrackieLLM
     VERSION 1.0.0
     DESCRIPTION "High-performance, multi-modal AI system for visually impaired users."
-    LANGUAGES C CXX CUDA OBJCXX
+    LANGUAGES C CXX
 )
+
+if(TK_ENABLE_CUDA)
+    enable_language(CUDA)
+endif()
 
 # Set a consistent version variable for use throughout the build scripts
 set(TRACKIELLM_VERSION ${PROJECT_VERSION})
@@ -89,7 +93,7 @@ else()
 endif()
 
 foreach(lang C CXX)
-    set(CMAKE_${lang}_FLAGS "${CMAKE_${lang}_FLAGS} ${COMMON_WARNING_FLAGS}")
+    add_compile_options(${COMMON_WARNING_FLAGS})
 endforeach()
 
 #--------------------------------------------------------------------------------
@@ -135,7 +139,7 @@ endif()
 #--------------------------------------------------------------------------------
 # We use Corrosion to integrate Rust crates seamlessly into the CMake build process.
 # It handles the `cargo build` calls and creates imported targets for CMake.
-find_package(Corrosion REQUIRED)
+# find_package(Corrosion REQUIRED)
 
 #--------------------------------------------------------------------------------
 # Subdirectory Processing

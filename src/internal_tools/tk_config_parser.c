@@ -11,12 +11,14 @@
 * SPDX-License-Identifier: AGPL-3.0 license
 */
 
+#define _DEFAULT_SOURCE
 #include "tk_config_parser.h"
 
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #define INITIAL_CONFIG_CAPACITY 16
 #define MAX_LINE_LENGTH 1024
@@ -261,5 +263,12 @@ bool tk_config_get_bool(const tk_config_t* config, const char* key, bool default
         return true;
     }
 
-    return false;
+    if (strcasecmp(value_str, "false") == 0 ||
+        strcasecmp(value_str, "no") == 0 ||
+        strcasecmp(value_str, "off") == 0 ||
+        strcmp(value_str, "0") == 0) {
+        return false;
+    }
+
+    return default_value;
 }
