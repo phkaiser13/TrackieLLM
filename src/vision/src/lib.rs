@@ -27,7 +27,7 @@
 
 // === TOC ===
 // 1. Crate-level Documentation & Attributes
-// 2. FFI Bindings Module (private)
+// 2. FFI Bindings Module
 // 3. Public Module Declarations
 // 4. Core Public Data Structures & Types
 // 5. Public Prelude
@@ -51,37 +51,8 @@
 
 // --- FFI Bindings Module ---
 // Contains the raw FFI declarations for the vision C/C++ API.
-mod ffi {
-    #![allow(non_camel_case_types, non_snake_case, dead_code)]
-    pub type tk_error_code_t = i32;
-    pub const TK_SUCCESS: tk_error_code_t = 0;
-
-    // Forward declarations from the C headers
-    pub enum tk_vision_pipeline_s {}
-    pub type tk_vision_pipeline_t = tk_vision_pipeline_s;
-    pub enum tk_vision_result_s {}
-    pub type tk_vision_result_t = tk_vision_result_s;
-
-    // A subset of the FFI functions for demonstration
-    extern "C" {
-        pub fn tk_vision_pipeline_create(
-            out_pipeline: *mut *mut tk_vision_pipeline_t,
-            config: *const std::ffi::c_void, // Placeholder for tk_vision_pipeline_config_t
-        ) -> tk_error_code_t;
-
-        pub fn tk_vision_pipeline_destroy(pipeline: *mut *mut tk_vision_pipeline_t);
-
-        pub fn tk_vision_pipeline_process_frame(
-            pipeline: *mut tk_vision_pipeline_t,
-            video_frame: *const std::ffi::c_void, // Placeholder for tk_video_frame_t
-            analysis_flags: u32,
-            timestamp_ns: u64,
-            out_result: *mut *mut tk_vision_result_t,
-        ) -> tk_error_code_t;
-
-        pub fn tk_vision_result_destroy(result: *mut *mut tk_vision_result_t);
-    }
-}
+// The implementation is in the `ffi.rs` file.
+pub mod ffi;
 
 // --- Public Module Declarations ---
 

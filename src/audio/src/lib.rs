@@ -26,7 +26,7 @@
 
 // === TOC ===
 // 1. Crate-level Documentation & Attributes
-// 2. FFI Bindings Module (private)
+// 2. FFI Bindings Module
 // 3. Public Module Declarations
 // 4. Core Public Data Structures & Types
 // 5. Public Prelude
@@ -55,37 +55,10 @@
 //! generates the audio, which is delivered back in chunks via another callback.
 
 // --- FFI Bindings Module ---
-mod ffi {
-    #![allow(non_camel_case_types, non_snake_case, dead_code)]
-    pub type tk_error_code_t = i32;
-    pub const TK_SUCCESS: tk_error_code_t = 0;
+// Contains the raw FFI declarations for the audio C API.
+// The implementation is in the `ffi.rs` file.
+pub mod ffi;
 
-    // Forward declarations from the C headers
-    pub enum tk_audio_pipeline_s {}
-    pub type tk_audio_pipeline_t = tk_audio_pipeline_s;
-
-    // A subset of the FFI functions for demonstration
-    extern "C" {
-        pub fn tk_audio_pipeline_create(
-            out_pipeline: *mut *mut tk_audio_pipeline_t,
-            config: *const std::ffi::c_void, // Placeholder
-            callbacks: std::ffi::c_void,     // Placeholder
-        ) -> tk_error_code_t;
-
-        pub fn tk_audio_pipeline_destroy(pipeline: *mut *mut tk_audio_pipeline_t);
-
-        pub fn tk_audio_pipeline_process_chunk(
-            pipeline: *mut tk_audio_pipeline_t,
-            audio_chunk: *const i16,
-            frame_count: usize,
-        ) -> tk_error_code_t;
-
-        pub fn tk_audio_pipeline_synthesize_text(
-            pipeline: *mut tk_audio_pipeline_t,
-            text_to_speak: *const std::os::raw::c_char,
-        ) -> tk_error_code_t;
-    }
-}
 
 // --- Public Module Declarations ---
 
