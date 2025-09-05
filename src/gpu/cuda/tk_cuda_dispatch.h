@@ -31,7 +31,7 @@
 
 #include "utils/tk_error_handling.h"
 #include "vision/tk_vision_pipeline.h" // For tk_video_frame_t
-#include "gpu/cuda/tk_cuda_kernels.h"   // For kernel parameter structs
+#include "gpu/tk_gpu_helper.h"   // For kernel parameter structs
 
 // Forward-declare the primary dispatcher object as an opaque type.
 typedef struct tk_cuda_dispatcher_s tk_cuda_dispatcher_t;

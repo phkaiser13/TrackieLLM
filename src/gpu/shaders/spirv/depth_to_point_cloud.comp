@@ -1,0 +1,51 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+
+layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+// Input depth map
+layout(binding = 0) readonly buffer InputDepth {
+    float data[];
+} u_input_depth;
+
+// Output point cloud (array of float3)
+layout(binding = 1) writeonly buffer OutputPointCloud {
+    vec3 data[];
+} u_output_points;
+
+// Camera intrinsics via push constants
+layout(push_constant) uniform PushConstants {
+    uint width;
+    uint height;
+    float fx;
+    float fy;
+    float cx;
+    float cy;
+} u_params;
+
+void main() {
+    // Get the global invocation ID, which corresponds to the pixel in the depth map
+    ivec2 pixel_coord = ivec2(gl_GlobalInvocationID.xy);
+
+    // Boundary check
+    if (pixel_coord.x >= u_params.width || pixel_coord.y >= u_params.height) {
+        return;
+    }
+
+    // Calculate the 1D index for this pixel
+    int index = pixel_coord.y * int(u_params.width) + pixel_coord.x;
+
+    // Read the depth value (d)
+    float d = u_input_depth.data[index];
+
+    // Unprojection formula
+    // x = (u - cx) * d / fx
+    // y = (v - cy) * d / fy
+    // z = d
+    float x = (float(pixel_coord.x) - u_params.cx) * d / u_params.fx;
+    float y = (float(pixel_coord.y) - u_params.cy) * d / u_params.fy;
+    float z = d;
+
+    // Write the 3D point to the output buffer
+    u_output_points.data[index] = vec3(x, y, z);
+}

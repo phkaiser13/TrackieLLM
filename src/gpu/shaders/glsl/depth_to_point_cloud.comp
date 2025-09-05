@@ -1,0 +1,44 @@
+#version 310 es
+
+layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+// Input depth map
+layout(std430, binding = 0) readonly buffer InputDepth {
+    float data[];
+} u_input_depth;
+
+// Output point cloud (array of vec3)
+layout(std430, binding = 1) writeonly buffer OutputPointCloud {
+    vec3 data[];
+} u_output_points;
+
+// Camera intrinsics via uniforms
+uniform uvec2 u_size;
+uniform float u_fx;
+uniform float u_fy;
+uniform float u_cx;
+uniform float u_cy;
+
+void main() {
+    // Get the global invocation ID
+    ivec2 pixel_coord = ivec2(gl_GlobalInvocationID.xy);
+
+    // Boundary check
+    if (pixel_coord.x >= int(u_size.x) || pixel_coord.y >= int(u_size.y)) {
+        return;
+    }
+
+    // Calculate the 1D index for this pixel
+    int index = pixel_coord.y * int(u_size.x) + pixel_coord.x;
+
+    // Read the depth value (d)
+    float d = u_input_depth.data[index];
+
+    // Unprojection formula
+    float x = (float(pixel_coord.x) - u_cx) * d / u_fx;
+    float y = (float(pixel_coord.y) - u_cy) * d / u_fy;
+    float z = d;
+
+    // Write the 3D point to the output buffer
+    u_output_points.data[index] = vec3(x, y, z);
+}

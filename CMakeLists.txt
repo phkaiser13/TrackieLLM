@@ -134,6 +134,61 @@ if(TK_ENABLE_ROCM)
     add_definitions(-DTK_HAS_ROCM)
 endif()
 
+# Vulkan Backend Configuration
+option(TK_ENABLE_VULKAN "Enable Vulkan support for GPU acceleration" ON)
+if(TK_ENABLE_VULKAN)
+    find_package(Vulkan REQUIRED)
+    if(Vulkan_FOUND)
+        message(STATUS "Vulkan support enabled. Found Vulkan version ${Vulkan_VERSION}.")
+        add_definitions(-DTK_HAS_VULKAN)
+    else()
+        message(WARNING "Vulkan support was enabled (TK_ENABLE_VULKAN=ON) but the Vulkan SDK was not found. Disabling Vulkan.")
+        set(TK_ENABLE_VULKAN OFF)
+    endif()
+endif()
+
+# OpenGL ES Backend Configuration
+option(TK_ENABLE_GLES "Enable OpenGL ES support for GPU acceleration" ON)
+if(TK_ENABLE_GLES)
+    find_package(EGL REQUIRED)
+    find_package(GLESv3 REQUIRED)
+    if(EGL_FOUND AND GLESv3_FOUND)
+        message(STATUS "OpenGL ES support enabled.")
+        add_definitions(-DTK_HAS_GLES)
+    else()
+        message(WARNING "GLES support was enabled (TK_ENABLE_GLES=ON) but EGL or GLESv3 libraries were not found. Disabling GLES.")
+        set(TK_ENABLE_GLES OFF)
+    endif()
+endif()
+
+# OpenCL Backend Configuration
+option(TK_ENABLE_OPENCL "Enable OpenCL support for GPU acceleration" ON)
+if(TK_ENABLE_OPENCL)
+    find_package(OpenCL REQUIRED)
+    if(OpenCL_FOUND)
+        message(STATUS "OpenCL support enabled.")
+        add_definitions(-DTK_HAS_OPENCL)
+    else()
+        message(WARNING "OpenCL support was enabled (TK_ENABLE_OPENCL=ON) but OpenCL was not found. Disabling OpenCL.")
+        set(TK_ENABLE_OPENCL OFF)
+    endif()
+endif()
+
+# Android NNAPI Backend Configuration
+option(TK_ENABLE_NNAPI "Enable Android NNAPI support for model acceleration" ON)
+if(ANDROID AND TK_ENABLE_NNAPI)
+    # NNAPI is part of the Android NDK, found with the toolchain.
+    # We just need to link against the `neuralnetworks` library.
+    find_library(NEURALNETWORKS_LIBRARY neuralnetworks)
+    if(NEURALNETWORKS_LIBRARY)
+         message(STATUS "Android NNAPI support enabled.")
+         add_definitions(-DTK_HAS_NNAPI)
+    else()
+        message(WARNING "NNAPI support was enabled but the neuralnetworks library was not found. Disabling NNAPI.")
+        set(TK_ENABLE_NNAPI OFF)
+    endif()
+endif()
+
 #--------------------------------------------------------------------------------
 # Rust/Cargo Integration
 #--------------------------------------------------------------------------------

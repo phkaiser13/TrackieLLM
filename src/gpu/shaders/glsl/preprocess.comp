@@ -1,0 +1,55 @@
+#version 310 es
+
+// Define a workgroup size
+layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+// Define the bindings for the input and output buffers (SSBOs)
+layout(std430, binding = 0) readonly buffer InputImage {
+    uint8_t data[];
+} u_input_image;
+
+layout(std430, binding = 1) writeonly buffer OutputTensor {
+    float data[];
+} u_output_tensor;
+
+// Uniforms for parameters
+uniform uvec2 u_input_size;
+uniform uvec2 u_output_size;
+uniform vec3 u_mean;
+uniform vec3 u_std_dev;
+
+void main() {
+    // Get the global invocation ID, which corresponds to the pixel in the output tensor
+    ivec2 store_pos = ivec2(gl_GlobalInvocationID.xy);
+
+    // Boundary check
+    if (store_pos.x >= int(u_output_size.x) || store_pos.y >= int(u_output_size.y)) {
+        return;
+    }
+
+    // --- Nearest Neighbor Scaling (for simplicity) ---
+    vec2 scale = vec2(u_input_size) / vec2(u_output_size);
+    ivec2 nearest_pos = ivec2(round((vec2(store_pos) + 0.5) * scale - 0.5));
+    nearest_pos = clamp(nearest_pos, ivec2(0), ivec2(u_input_size) - ivec2(1));
+    
+    int read_idx = (nearest_pos.y * int(u_input_size.x) + nearest_pos.x) * 3;
+    
+    vec3 pixel_in = vec3(
+        float(u_input_image.data[read_idx + 0]) / 255.0,
+        float(u_input_image.data[read_idx + 1]) / 255.0,
+        float(u_input_image.data[read_idx + 2]) / 255.0
+    );
+
+    // --- Normalization ---
+    vec3 pixel_normalized = (pixel_in - u_mean) / u_std_dev;
+
+    // --- Planar (NCHW) Output ---
+    uint c_stride = u_output_size.x * u_output_size.y;
+    uint out_idx_r = c_stride * 0 + uint(store_pos.y) * u_output_size.x + uint(store_pos.x);
+    uint out_idx_g = c_stride * 1 + uint(store_pos.y) * u_output_size.x + uint(store_pos.x);
+    uint out_idx_b = c_stride * 2 + uint(store_pos.y) * u_output_size.x + uint(store_pos.x);
+
+    u_output_tensor.data[out_idx_r] = pixel_normalized.r;
+    u_output_tensor.data[out_idx_g] = pixel_normalized.g;
+    u_output_tensor.data[out_idx_b] = pixel_normalized.b;
+}
