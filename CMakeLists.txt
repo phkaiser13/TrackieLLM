@@ -22,10 +22,6 @@ project(TrackieLLM
     LANGUAGES C CXX
 )
 
-if(TK_ENABLE_CUDA)
-    enable_language(CUDA)
-endif()
-
 # Set a consistent version variable for use throughout the build scripts
 set(TRACKIELLM_VERSION ${PROJECT_VERSION})
 message(STATUS "Configuring TrackieLLM version ${TRACKIELLM_VERSION}")
@@ -100,6 +96,7 @@ endforeach()
 # GPU Backend Configuration
 #--------------------------------------------------------------------------------
 if(TK_ENABLE_CUDA)
+    enable_language(CUDA)
     # Find the CUDA toolkit. The `find_package` command for CUDA is robust and
     # sets up all necessary variables and targets.
     find_package(CUDA 11.0 REQUIRED)

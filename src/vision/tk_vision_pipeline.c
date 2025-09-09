@@ -228,43 +228,81 @@ void tk_vision_result_destroy(tk_vision_result_t** result) {
 // Internal Helper Functions
 //------------------------------------------------------------------------------
 
+// A placeholder for COCO class labels. A real implementation would load this from a file.
+const char* COCO_LABELS[] = {
+    "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
+    "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
+    "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
+    "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard",
+    "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
+    "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch",
+    "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard",
+    "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase",
+    "scissors", "teddy bear", "hair drier", "toothbrush"
+};
+const size_t COCO_CLASS_COUNT = 80;
+
+
 static tk_error_code_t load_models(tk_vision_pipeline_t* pipeline, const tk_vision_pipeline_config_t* config) {
     tk_error_code_t err;
 
-    // Validate config paths
-    if (!config->object_detection_model_path || 
-        !config->depth_estimation_model_path || 
-        !config->tesseract_data_path) {
+    if (!config->object_detection_model_path || !config->depth_estimation_model_path || !config->tesseract_data_path) {
         tk_log_error("Missing required model paths in configuration");
         return TK_ERROR_INVALID_ARGUMENT;
     }
 
     tk_log_info("Loading vision models...");
 
-    // Load object detector
-    err = tk_object_detector_create(&pipeline->object_detector, config->object_detection_model_path);
+    // --- Load Object Detector ---
+    tk_object_detector_config_t detector_config = {
+        .backend = config->backend,
+        .gpu_device_id = config->gpu_device_id,
+        .model_path = config->object_detection_model_path,
+        .input_width = 640, // Common for YOLOv5
+        .input_height = 640,
+        .class_labels = COCO_LABELS,
+        .class_count = COCO_CLASS_COUNT,
+        .confidence_threshold = config->object_confidence_threshold,
+        .iou_threshold = 0.5f // A common default for NMS
+    };
+    err = tk_object_detector_create(&pipeline->object_detector, &detector_config);
     if (err != TK_SUCCESS) {
-        tk_log_error("Failed to load object detection model from %s", config->object_detection_model_path);
-        return TK_ERROR_MODEL_LOAD_FAILED;
+        tk_log_error("Failed to create object detector with model from %s", config->object_detection_model_path->path_str);
+        return err;
     }
     tk_log_debug("Object detection model loaded successfully");
 
-    // Load depth estimator
-    err = tk_depth_midas_create(&pipeline->depth_estimator, config->depth_estimation_model_path);
+    // --- Load Depth Estimator ---
+    tk_depth_estimator_config_t depth_config = {
+        .backend = config->backend,
+        .gpu_device_id = config->gpu_device_id,
+        .model_path = config->depth_estimation_model_path,
+        .input_width = 256, // Common for MiDaS DPT-SwinV2-Tiny
+        .input_height = 256
+    };
+    err = tk_depth_estimator_create(&pipeline->depth_estimator, &depth_config);
     if (err != TK_SUCCESS) {
-        tk_log_error("Failed to load depth estimation model from %s", config->depth_estimation_model_path);
-        tk_object_detector_destroy(&pipeline->object_detector);
-        return TK_ERROR_MODEL_LOAD_FAILED;
+        tk_log_error("Failed to create depth estimator with model from %s", config->depth_estimation_model_path->path_str);
+        tk_object_detector_destroy(&pipeline->object_detector); // Clean up previous success
+        return err;
     }
     tk_log_debug("Depth estimation model loaded successfully");
 
-    // Load text recognizer
-    err = tk_text_recognizer_create(&pipeline->text_recognizer, config->tesseract_data_path);
+    // --- Load Text Recognizer ---
+    tk_ocr_config_t ocr_config = {
+        .data_path = config->tesseract_data_path,
+        .language = TK_OCR_LANG_ENGLISH, // Default to English
+        .engine_mode = TK_OCR_ENGINE_DEFAULT,
+        .psm = TK_OCR_PSM_AUTO,
+        .dpi = 300, // A reasonable default DPI
+        .num_threads = 2, // Default number of threads
+    };
+    err = tk_text_recognition_create(&pipeline->text_recognizer, &ocr_config);
     if (err != TK_SUCCESS) {
-        tk_log_error("Failed to initialize text recognizer with data path %s", config->tesseract_data_path);
+        tk_log_error("Failed to initialize text recognizer with data path %s", config->tesseract_data_path->path_str);
         tk_object_detector_destroy(&pipeline->object_detector);
-        tk_depth_midas_destroy(&pipeline->depth_estimator);
-        return TK_ERROR_MODEL_LOAD_FAILED;
+        tk_depth_estimator_destroy(&pipeline->depth_estimator);
+        return err;
     }
     tk_log_debug("Text recognizer initialized successfully");
 
@@ -276,261 +314,207 @@ static void unload_models(tk_vision_pipeline_t* pipeline) {
         tk_object_detector_destroy(&pipeline->object_detector);
     }
     if (pipeline->depth_estimator) {
-        tk_depth_midas_destroy(&pipeline->depth_estimator);
+        tk_depth_estimator_destroy(&pipeline->depth_estimator);
     }
     if (pipeline->text_recognizer) {
-        tk_text_recognizer_destroy(&pipeline->text_recognizer);
+        tk_text_recognition_destroy(&pipeline->text_recognizer);
     }
 }
 
 static tk_error_code_t perform_object_detection(tk_vision_pipeline_t* pipeline, const tk_video_frame_t* frame, tk_vision_result_t* result) {
-    tk_object_detection_result_t* detection_result = NULL;
-    tk_error_code_t err = tk_object_detector_process(pipeline->object_detector, frame, &detection_result);
+    tk_detection_result_t* detections = NULL;
+    size_t detection_count = 0;
+
+    tk_error_code_t err = tk_object_detector_detect(pipeline->object_detector, frame, &detections, &detection_count);
     if (err != TK_SUCCESS) {
         return err;
     }
 
-    // Filter and copy results
-    size_t valid_detections = 0;
-    for (size_t i = 0; i < detection_result->detection_count; ++i) {
-        if (detection_result->detections[i].confidence >= pipeline->object_confidence_threshold) {
-            valid_detections++;
-        }
-    }
-
-    valid_detections = (valid_detections > pipeline->max_detected_objects) ? pipeline->max_detected_objects : valid_detections;
-
-    if (valid_detections > 0) {
-        result->objects = (tk_vision_object_t*)calloc(valid_detections, sizeof(tk_vision_object_t));
+    if (detection_count > 0) {
+        result->objects = (tk_vision_object_t*)calloc(detection_count, sizeof(tk_vision_object_t));
         if (!result->objects) {
-            tk_object_detection_result_destroy(&detection_result);
+            tk_object_detector_free_results(&detections);
             return TK_ERROR_OUT_OF_MEMORY;
         }
 
-        size_t idx = 0;
-        for (size_t i = 0; i < detection_result->detection_count && idx < valid_detections; ++i) {
-            if (detection_result->detections[i].confidence >= pipeline->object_confidence_threshold) {
-                result->objects[idx].class_id = detection_result->detections[i].class_id;
-                
-                // Copy label string
-                if (detection_result->detections[i].label) {
-                    result->objects[idx].label = strdup(detection_result->detections[i].label);
-                } else {
-                    result->objects[idx].label = strdup("unknown");
-                }
-                
-                result->objects[idx].confidence = detection_result->detections[i].confidence;
-                result->objects[idx].bbox = detection_result->detections[i].bbox;
-                result->objects[idx].distance_meters = 0.0f; // Will be populated by fusion
-                result->objects[idx].width_meters = 0.0f;    // Will be populated by fusion
-                result->objects[idx].height_meters = 0.0f;   // Will be populated by fusion
-                idx++;
-            }
+        for (size_t i = 0; i < detection_count; ++i) {
+            result->objects[i].class_id = detections[i].class_id;
+            result->objects[i].label = detections[i].label; // Direct pointer, no copy needed as labels are static const
+            result->objects[i].confidence = detections[i].confidence;
+            result->objects[i].bbox = detections[i].bbox;
+            result->objects[i].distance_meters = 0.0f; // Will be populated by fusion
+            result->objects[i].width_meters = 0.0f;    // Will be populated by fusion
+            result->objects[i].height_meters = 0.0f;   // Will be populated by fusion
         }
-        result->object_count = valid_detections;
+        result->object_count = detection_count;
     }
 
-    tk_object_detection_result_destroy(&detection_result);
+    tk_object_detector_free_results(&detections);
     return TK_SUCCESS;
 }
 
 static tk_error_code_t perform_depth_estimation(tk_vision_pipeline_t* pipeline, const tk_video_frame_t* frame, tk_vision_result_t* result) {
-    tk_depth_map_t* depth_map = NULL;
-    tk_error_code_t err = tk_depth_midas_process(pipeline->depth_estimator, frame, &depth_map);
+    // The estimate function allocates the depth map, which will be owned by the result struct.
+    tk_error_code_t err = tk_depth_estimator_estimate(pipeline->depth_estimator, frame, &result->depth_map);
     if (err != TK_SUCCESS) {
         return err;
     }
 
-    result->depth_map = (tk_vision_depth_map_t*)malloc(sizeof(tk_vision_depth_map_t));
-    if (!result->depth_map) {
-        tk_depth_map_destroy(&depth_map);
-        return TK_ERROR_OUT_OF_MEMORY;
-    }
+    // The 'result->depth_map' is now populated and owned by the result.
+    // It will be freed in tk_vision_result_destroy.
 
-    result->depth_map->width = depth_map->width;
-    result->depth_map->height = depth_map->height;
-    size_t data_size = depth_map->width * depth_map->height * sizeof(float);
-    result->depth_map->data = (float*)malloc(data_size);
-    if (!result->depth_map->data) {
-        free(result->depth_map);
-        result->depth_map = NULL;
-        tk_depth_map_destroy(&depth_map);
-        return TK_ERROR_OUT_OF_MEMORY;
-    }
-    memcpy(result->depth_map->data, depth_map->data, data_size);
-
-    tk_depth_map_destroy(&depth_map);
     return TK_SUCCESS;
 }
 
 static tk_error_code_t perform_ocr(tk_vision_pipeline_t* pipeline, const tk_video_frame_t* frame, tk_vision_result_t* result) {
+    // For now, we will process the whole image. A more advanced implementation
+    // would iterate over detected objects of interest (e.g., signs, books)
+    // and process only their bounding boxes.
+
+    tk_ocr_image_params_t image_params = {
+        .image_data = frame->data,
+        .width = frame->width,
+        .height = frame->height,
+        .channels = 3, // Assuming RGB8
+        .stride = frame->width * 3,
+        .psm = TK_OCR_PSM_AUTO,
+    };
+
     tk_ocr_result_t* ocr_result = NULL;
-    tk_error_code_t err = tk_text_recognizer_process(pipeline->text_recognizer, frame, &ocr_result);
+    tk_error_code_t err = tk_text_recognition_process_image(
+        pipeline->text_recognizer,
+        &image_params,
+        &ocr_result
+    );
+
     if (err != TK_SUCCESS) {
-        return err;
+        tk_log_warn("OCR processing failed with error %d", err);
+        return TK_SUCCESS; // Do not fail the whole pipeline for OCR
     }
 
-    if (ocr_result->block_count > 0) {
-        result->text_blocks = (tk_vision_text_block_t*)calloc(ocr_result->block_count, sizeof(tk_vision_text_block_t));
+    if (ocr_result && ocr_result->region_count > 0) {
+        result->text_blocks = (tk_vision_text_block_t*)calloc(ocr_result->region_count, sizeof(tk_vision_text_block_t));
         if (!result->text_blocks) {
-            tk_ocr_result_destroy(&ocr_result);
+            tk_text_recognition_free_result(&ocr_result);
             return TK_ERROR_OUT_OF_MEMORY;
         }
 
-        for (size_t i = 0; i < ocr_result->block_count; ++i) {
-            // Copy text string
-            if (ocr_result->blocks[i].text) {
-                result->text_blocks[i].text = strdup(ocr_result->blocks[i].text);
+        for (size_t i = 0; i < ocr_result->region_count; ++i) {
+            tk_ocr_text_region_t* region = &ocr_result->regions[i];
+
+            if (region->text) {
+                result->text_blocks[i].text = strdup(region->text);
             } else {
                 result->text_blocks[i].text = strdup("");
             }
-            result->text_blocks[i].confidence = ocr_result->blocks[i].confidence;
-            result->text_blocks[i].bbox = ocr_result->blocks[i].bbox;
+
+            result->text_blocks[i].confidence = region->confidence;
+            result->text_blocks[i].bbox.x = region->x;
+            result->text_blocks[i].bbox.y = region->y;
+            result->text_blocks[i].bbox.w = region->width;
+            result->text_blocks[i].bbox.h = region->height;
         }
-        result->text_block_count = ocr_result->block_count;
+        result->text_block_count = ocr_result->region_count;
     }
 
-    tk_ocr_result_destroy(&ocr_result);
+    tk_text_recognition_free_result(&ocr_result);
     return TK_SUCCESS;
 }
 
+// --- FFI Declarations for Rust Fusion Library ---
+
+// Define the C-compatible structs that Rust will return
+typedef struct {
+    uint32_t class_id;
+    float confidence;
+    tk_rect_t bbox;
+    float distance_meters;
+    float width_meters;
+    float height_meters;
+} EnrichedObject;
+
+typedef struct {
+    const EnrichedObject* objects;
+    size_t count;
+} CFusedResult;
+
+// Declare the external Rust functions
+extern CFusedResult* tk_vision_rust_fuse_data(
+    const tk_detection_result_t* detections_ptr,
+    size_t detection_count,
+    const tk_vision_depth_map_t* depth_map_ptr,
+    uint32_t frame_width,
+    uint32_t frame_height,
+    float focal_length_x,
+    float focal_length_y
+);
+
+extern void tk_vision_rust_free_fused_result(CFusedResult* result_ptr);
+
+
 /**
- * @brief Enhanced object-depth fusion with robust distance calculation and size estimation
- * 
- * This function implements a more sophisticated approach to fusing object detection
- * results with depth information:
- * 1. Calculates robust distance using median/minimum of central pixels instead of single point
- * 2. Estimates real-world dimensions using camera parameters and triangulation
+ * @brief Calls the Rust library to fuse object detection and depth data.
+ *
+ * This function acts as a bridge to the high-performance, safe Rust implementation
+ * of the fusion logic. It passes pointers to the raw C data, and the Rust side
+ * returns a new structure with the calculated distances and sizes.
  */
 static tk_error_code_t fuse_object_depth(tk_vision_pipeline_t* pipeline, tk_vision_result_t* result, const tk_video_frame_t* frame) {
     if (!result->depth_map || result->object_count == 0) {
         return TK_SUCCESS; // Nothing to fuse
     }
 
-    uint32_t depth_width = result->depth_map->width;
-    uint32_t depth_height = result->depth_map->height;
-    float* depth_data = result->depth_map->data;
-    
-    uint32_t frame_width = frame->width;
-    uint32_t frame_height = frame->height;
-
-    // Camera parameters for size estimation
-    float focal_length_x = pipeline->focal_length_x;
-    float focal_length_y = pipeline->focal_length_y;
-
-    for (size_t i = 0; i < result->object_count; ++i) {
-        tk_rect_t bbox = result->objects[i].bbox;
-        
-        // Normalize bounding box coordinates to depth map space
-        float norm_x_min = (float)bbox.x / (float)frame_width;
-        float norm_y_min = (float)bbox.y / (float)frame_height;
-        float norm_x_max = (float)(bbox.x + bbox.w) / (float)frame_width;
-        float norm_y_max = (float)(bbox.y + bbox.h) / (float)frame_height;
-        
-        // Map to depth coordinates
-        uint32_t depth_x_min = (uint32_t)(norm_x_min * (depth_width - 1));
-        uint32_t depth_y_min = (uint32_t)(norm_y_min * (depth_height - 1));
-        uint32_t depth_x_max = (uint32_t)(norm_x_max * (depth_width - 1));
-        uint32_t depth_y_max = (uint32_t)(norm_y_max * (depth_height - 1));
-        
-        // Boundary checks and clamping
-        depth_x_min = (depth_x_min < depth_width) ? depth_x_min : depth_width - 1;
-        depth_y_min = (depth_y_min < depth_height) ? depth_y_min : depth_height - 1;
-        depth_x_max = (depth_x_max < depth_width) ? depth_x_max : depth_width - 1;
-        depth_y_max = (depth_y_max < depth_height) ? depth_y_max : depth_height - 1;
-        
-        if (depth_x_min >= depth_x_max || depth_y_min >= depth_y_max) {
-            result->objects[i].distance_meters = -1.0f;
-            result->objects[i].width_meters = -1.0f;
-            result->objects[i].height_meters = -1.0f;
-            continue;
-        }
-
-        // Focus on the central 25% of the bounding box for more robust distance estimation
-        uint32_t center_width = depth_x_max - depth_x_min;
-        uint32_t center_height = depth_y_max - depth_y_min;
-        uint32_t crop_margin_x = center_width / 4;
-        uint32_t crop_margin_y = center_height / 4;
-        
-        uint32_t center_x_min = depth_x_min + crop_margin_x;
-        uint32_t center_y_min = depth_y_min + crop_margin_y;
-        uint32_t center_x_max = depth_x_max - crop_margin_x;
-        uint32_t center_y_max = depth_y_max - crop_margin_y;
-        
-        // Collect valid depth values from the central region
-        float* valid_depths = NULL;
-        size_t valid_count = 0;
-        size_t max_samples = (center_x_max - center_x_min + 1) * (center_y_max - center_y_min + 1);
-        
-        if (max_samples > 0) {
-            valid_depths = (float*)malloc(max_samples * sizeof(float));
-            if (!valid_depths) {
-                result->objects[i].distance_meters = -1.0f;
-                result->objects[i].width_meters = -1.0f;
-                result->objects[i].height_meters = -1.0f;
-                continue;
-            }
-            
-            for (uint32_t y = center_y_min; y <= center_y_max; ++y) {
-                for (uint32_t x = center_x_min; x <= center_x_max; ++x) {
-                    size_t index = y * depth_width + x;
-                    float depth_value = depth_data[index];
-                    
-                    // Only consider valid positive depth values
-                    if (depth_value > 0.0f && depth_value < 100.0f) { // Reasonable depth range
-                        valid_depths[valid_count++] = depth_value;
-                    }
-                }
-            }
-        }
-        
-        // Calculate robust distance (minimum or median of valid depths)
-        float robust_distance = -1.0f;
-        if (valid_count > 0) {
-            // Sort valid depths to find median
-            for (size_t j = 0; j < valid_count - 1; ++j) {
-                for (size_t k = j + 1; k < valid_count; ++k) {
-                    if (valid_depths[j] > valid_depths[k]) {
-                        float temp = valid_depths[j];
-                        valid_depths[j] = valid_depths[k];
-                        valid_depths[k] = temp;
-                    }
-                }
-            }
-            
-            // Use minimum for safety-critical applications, or median for general use
-            // For assistive technology, minimum is often better (closest point)
-            robust_distance = valid_depths[0]; // Minimum distance
-            
-            // Alternative: use median
-            // robust_distance = (valid_count % 2 == 1) ? 
-            //                   valid_depths[valid_count/2] : 
-            //                   (valid_depths[valid_count/2-1] + valid_depths[valid_count/2]) / 2.0f;
-        }
-        
-        result->objects[i].distance_meters = robust_distance;
-        
-        // Estimate real-world dimensions using triangulation
-        if (robust_distance > 0.0f && focal_length_x > 0.0f && focal_length_y > 0.0f) {
-            // Convert pixel dimensions to meters using the triangulation formula:
-            // real_size = (pixel_size * distance) / focal_length
-            result->objects[i].width_meters = (bbox.w * robust_distance) / focal_length_x;
-            result->objects[i].height_meters = (bbox.h * robust_distance) / focal_length_y;
-        } else {
-            result->objects[i].width_meters = -1.0f;
-            result->objects[i].height_meters = -1.0f;
-        }
-        
-        // Clean up temporary array
-        if (valid_depths) {
-            free(valid_depths);
-        }
-        
-        tk_log_debug("Object %zu (%s) at (%d,%d) distance: %.2fm, size: %.2fx%.2fm", 
-                    i, result->objects[i].label, bbox.x, bbox.y, 
-                    result->objects[i].distance_meters,
-                    result->objects[i].width_meters, result->objects[i].height_meters);
+    // The Rust function needs an array of tk_detection_result_t, but our pipeline
+    // result has tk_vision_object_t. For this call, we'll create a temporary
+    // array of the required input type.
+    tk_detection_result_t* raw_detections = (tk_detection_result_t*)malloc(result->object_count * sizeof(tk_detection_result_t));
+    if (!raw_detections) {
+        return TK_ERROR_OUT_OF_MEMORY;
     }
+    for (size_t i = 0; i < result->object_count; ++i) {
+        raw_detections[i].class_id = result->objects[i].class_id;
+        raw_detections[i].label = result->objects[i].label;
+        raw_detections[i].confidence = result->objects[i].confidence;
+        raw_detections[i].bbox = result->objects[i].bbox;
+    }
+
+    // Call the external Rust function
+    CFusedResult* fused_result = tk_vision_rust_fuse_data(
+        raw_detections,
+        result->object_count,
+        result->depth_map,
+        frame->width,
+        frame->height,
+        pipeline->focal_length_x,
+        pipeline->focal_length_y
+    );
+
+    free(raw_detections); // Free the temporary array
+
+    if (!fused_result) {
+        tk_log_error("Rust fusion function returned null. Fusion failed.");
+        return TK_ERROR_INFERENCE_FAILED; // Or a more specific error
+    }
+
+    // The number of objects should match
+    if (fused_result->count != result->object_count) {
+        tk_log_warn("Mismatch in object count between C (%zu) and Rust (%zu) layers.", result->object_count, fused_result->count);
+    }
+
+    // Copy the fused data (distance, width, height) back into our main result struct
+    for (size_t i = 0; i < result->object_count && i < fused_result->count; ++i) {
+        result->objects[i].distance_meters = fused_result->objects[i].distance_meters;
+        result->objects[i].width_meters = fused_result->objects[i].width_meters;
+        result->objects[i].height_meters = fused_result->objects[i].height_meters;
+
+        tk_log_debug("Object %zu (%s) fused distance: %.2fm, size: %.2fx%.2fm",
+                     i, result->objects[i].label,
+                     result->objects[i].distance_meters,
+                     result->objects[i].width_meters, result->objects[i].height_meters);
+    }
+
+    // IMPORTANT: Free the memory allocated by the Rust library
+    tk_vision_rust_free_fused_result(fused_result);
 
     return TK_SUCCESS;
 }
