@@ -438,6 +438,32 @@ void tk_decision_engine_free_response(tk_llm_response_t** response);
  */
 void tk_decision_engine_free_action_params(tk_action_params_t* params);
 
+
+//------------------------------------------------------------------------------
+// High-Level Cortex Commands
+//------------------------------------------------------------------------------
+
+/**
+ * @brief Runs a full cycle to describe the current environment.
+ *
+ * This function orchestrates a complete sequence:
+ * 1. It calls into the Rust 'reasoning' module to generate a prompt based on the world model.
+ * 2. It sends this prompt to the LLM.
+ * 3. It takes the LLM's textual response and sends it to the TTS engine to be spoken.
+ *
+ * This is a high-level command that represents a primary function of the Cortex.
+ *
+ * @param engine The decision engine instance, used to access other subsystems.
+ * @param cortex_context A pointer to the main tk_cortex_t object to access runners.
+ * @return TK_SUCCESS on successful execution of the full cycle.
+ */
+TK_NODISCARD tk_error_code_t tk_decision_engine_describe_environment(
+    tk_decision_engine_t* engine,
+    void* llm_runner_ctx,    // Opaque pointer to tk_llm_runner_t
+    void* audio_pipeline_ctx // Opaque pointer to tk_audio_pipeline_t
+);
+
+
 #ifdef __cplusplus
 }
 #endif

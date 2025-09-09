@@ -208,7 +208,7 @@ TK_NODISCARD tk_error_code_t tk_object_detector_detect(
     }
     
     // Post-process detections
-    err = postprocess_detections(detector, out_results, out_result_count);
+    err = postprocess_detections(detector, out_results, out_result_count, video_frame);
     if (err != TK_SUCCESS) {
         return err;
     }
@@ -411,6 +411,15 @@ static tk_error_code_t preprocess_frame(tk_object_detector_t* detector,
     return TK_SUCCESS;
 }
 
+// A structure to hold candidate detections before NMS
+typedef struct {
+    tk_rect_t bbox;
+    float confidence;
+    uint32_t class_id;
+    bool active; // Flag to mark if this box is kept after NMS
+} tk_candidate_detection_t;
+
+
 static tk_error_code_t run_inference(tk_object_detector_t* detector) {
     // Create input tensor
     auto memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
@@ -421,16 +430,7 @@ static tk_error_code_t run_inference(tk_object_detector_t* detector) {
         detector->input_node_dims.data(), 
         detector->input_node_dims.size()
     );
-    
-    // Prepare output tensor
-    // In a real implementation, you would get the output tensor info from the model
-    // For now, we'll assume a fixed output size
-    size_t output_tensor_size = detector->max_raw_detections * 6; // x, y, w, h, conf, class
-    float* output_tensor_values = (float*)malloc(output_tensor_size * sizeof(float));
-    if (!output_tensor_values) {
-        return TK_ERROR_OUT_OF_MEMORY;
-    }
-    
+
     // Run inference
     const char* input_names[] = { detector->input_node_name };
     const char* output_names[] = { detector->output_node_name };
@@ -447,77 +447,163 @@ static tk_error_code_t run_inference(tk_object_detector_t* detector) {
         );
         
         // Copy output data
-        // This assumes the output is a single tensor with shape [1, num_detections, 6]
         Ort::Value& output_tensor = output_tensors.front();
         float* output_data = output_tensor.GetTensorMutableData<float>();
         
         size_t output_data_size = output_tensor.GetTensorTypeAndShapeInfo().GetElementCount();
-        if (output_data_size > detector->max_raw_detections * 6) {
-            output_data_size = detector->max_raw_detections * 6;
+
+        // Ensure our raw_detections buffer is large enough
+        if (output_data_size > detector->max_raw_detections) {
+            // This case should be handled gracefully, e.g., by reallocating or logging an error.
+            // For now, we'll log an error and truncate.
+            tk_log_error("Model output size (%zu) exceeds allocated buffer size (%zu). Truncating.",
+                         output_data_size, detector->max_raw_detections);
+            output_data_size = detector->max_raw_detections;
         }
         
         memcpy(detector->raw_detections, output_data, output_data_size * sizeof(float));
+
     } catch (const Ort::Exception& e) {
         tk_log_error("ONNX Runtime inference error: %s", e.what());
-        free(output_tensor_values);
         return TK_ERROR_INFERENCE_FAILED;
     }
     
-    free(output_tensor_values);
     return TK_SUCCESS;
 }
+
 
 static tk_error_code_t postprocess_detections(tk_object_detector_t* detector, 
                                               tk_detection_result_t** out_results, 
-                                              size_t* out_result_count) {
-    // Apply confidence filtering
-    size_t valid_detections_count = 0;
-    apply_confidence_filter(detector, &valid_detections_count);
+                                              size_t* out_result_count,
+                                              const tk_video_frame_t* original_frame) {
     
-    // Apply Non-Max Suppression
-    size_t nms_filtered_count = 0;
-    apply_nms(detector, valid_detections_count, &nms_filtered_count);
-    
-    // Allocate results array
-    tk_detection_result_t* results = (tk_detection_result_t*)malloc(
-        nms_filtered_count * sizeof(tk_detection_result_t)
-    );
-    if (!results && nms_filtered_count > 0) {
+    // The output of YOLOv5 is typically [batch_size, num_proposals, 5 + num_classes]
+    // e.g., [1, 25200, 85] for COCO dataset (80 classes)
+    Ort::TypeInfo output_type_info = detector->session->GetOutputTypeInfo(0);
+    auto output_tensor_info = output_type_info.GetTensorTypeAndShapeInfo();
+    std::vector<int64_t> output_dims = output_tensor_info.GetShape();
+
+    if (output_dims.size() != 3 || output_dims[0] != 1) {
+        tk_log_error("Unsupported model output shape.");
+        return TK_ERROR_INFERENCE_FAILED;
+    }
+
+    const size_t num_proposals = output_dims[1];
+    const size_t proposal_length = output_dims[2]; // 5 (cx, cy, w, h, conf) + class_count
+    const size_t num_classes = detector->config.class_count;
+
+    if (proposal_length != 5 + num_classes) {
+        tk_log_error("Model output proposal length (%zu) does not match expected length (%zu).", proposal_length, 5 + num_classes);
+        return TK_ERROR_INFERENCE_FAILED;
+    }
+
+    tk_candidate_detection_t* candidates = (tk_candidate_detection_t*)calloc(num_proposals, sizeof(tk_candidate_detection_t));
+    if (!candidates) return TK_ERROR_OUT_OF_MEMORY;
+
+    size_t candidate_count = 0;
+
+    // 1. Decode and Filter by Confidence
+    for (size_t i = 0; i < num_proposals; ++i) {
+        float* proposal = detector->raw_detections + i * proposal_length;
+        float object_confidence = proposal[4];
+
+        if (object_confidence < detector->config.confidence_threshold) {
+            continue;
+        }
+
+        // Find the class with the highest score
+        uint32_t best_class_id = 0;
+        float max_class_score = 0.0f;
+        for (size_t j = 0; j < num_classes; ++j) {
+            if (proposal[5 + j] > max_class_score) {
+                max_class_score = proposal[5 + j];
+                best_class_id = j;
+            }
+        }
+
+        float final_confidence = object_confidence * max_class_score;
+
+        if (final_confidence < detector->config.confidence_threshold) {
+            continue;
+        }
+
+        // Convert box from [center_x, center_y, width, height] to [x, y, width, height]
+        candidates[candidate_count].bbox.x = (int)(proposal[0] - proposal[2] / 2.0f);
+        candidates[candidate_count].bbox.y = (int)(proposal[1] - proposal[3] / 2.0f);
+        candidates[candidate_count].bbox.w = (int)proposal[2];
+        candidates[candidate_count].bbox.h = (int)proposal[3];
+        candidates[candidate_count].confidence = final_confidence;
+        candidates[candidate_count].class_id = best_class_id;
+        candidates[candidate_count].active = true;
+        candidate_count++;
+    }
+
+    // 2. Non-Max Suppression (NMS)
+    for (size_t i = 0; i < candidate_count; ++i) {
+        if (!candidates[i].active) continue;
+
+        for (size_t j = i + 1; j < candidate_count; ++j) {
+            if (!candidates[j].active) continue;
+
+            if (candidates[i].class_id != candidates[j].class_id) continue;
+
+            float iou = calculate_iou(&candidates[i].bbox, &candidates[j].bbox);
+            if (iou > detector->config.iou_threshold) {
+                if (candidates[i].confidence > candidates[j].confidence) {
+                    candidates[j].active = false;
+                } else {
+                    candidates[i].active = false;
+                    // Break inner loop and re-evaluate `i` with the better box
+                    break;
+                }
+            }
+        }
+    }
+
+    // 3. Count final results and allocate memory
+    size_t final_count = 0;
+    for (size_t i = 0; i < candidate_count; ++i) {
+        if (candidates[i].active) {
+            final_count++;
+        }
+    }
+
+    if (final_count == 0) {
+        *out_results = NULL;
+        *out_result_count = 0;
+        free(candidates);
+        return TK_SUCCESS;
+    }
+
+    tk_detection_result_t* final_results = (tk_detection_result_t*)malloc(final_count * sizeof(tk_detection_result_t));
+    if (!final_results) {
+        free(candidates);
         return TK_ERROR_OUT_OF_MEMORY;
     }
-    
-    // Copy filtered detections to results array
-    for (size_t i = 0; i < nms_filtered_count; i++) {
-        // In a real implementation, you would copy the actual detection data
-        // This is a placeholder
-        results[i].class_id = 0;
-        results[i].label = detector->config.class_labels[0];
-        results[i].confidence = 0.0f;
-        results[i].bbox.x = 0;
-        results[i].bbox.y = 0;
-        results[i].bbox.w = 0;
-        results[i].bbox.h = 0;
+
+    // 4. Copy final results
+    size_t result_idx = 0;
+    for (size_t i = 0; i < candidate_count; ++i) {
+        if (candidates[i].active) {
+            final_results[result_idx].bbox = candidates[i].bbox;
+            final_results[result_idx].class_id = candidates[i].class_id;
+            final_results[result_idx].confidence = candidates[i].confidence;
+            final_results[result_idx].label = detector->config.class_labels[candidates[i].class_id];
+            result_idx++;
+        }
     }
     
-    *out_results = results;
-    *out_result_count = nms_filtered_count;
-    
+    free(candidates);
+
+    // 5. Convert coordinates to original image space
+    convert_to_original_coordinates(final_results, final_count,
+                                    original_frame->width, original_frame->height,
+                                    detector->config.input_width, detector->config.input_height);
+
+    *out_results = final_results;
+    *out_result_count = final_count;
+
     return TK_SUCCESS;
-}
-
-static void apply_confidence_filter(tk_object_detector_t* detector, 
-                                   size_t* valid_detections_count) {
-    // This function would filter detections based on confidence threshold
-    // Implementation details would depend on the model output format
-    *valid_detections_count = 0; // Placeholder
-}
-
-static void apply_nms(tk_object_detector_t* detector, 
-                     size_t valid_detections_count,
-                     size_t* nms_filtered_count) {
-    // This function would apply Non-Max Suppression to remove redundant detections
-    // Implementation would involve calculating IoU and suppressing overlapping boxes
-    *nms_filtered_count = valid_detections_count; // Placeholder
 }
 
 static float calculate_iou(const tk_rect_t* bbox1, const tk_rect_t* bbox2) {

@@ -64,6 +64,42 @@ pub struct MemoryFragment {
     pub importance: f32,
 }
 
+// --- Persistence Layer Design ---
+
+/// User-specific preferences that can be saved and loaded.
+#[derive(Debug, Clone)]
+pub struct UserPreferences {
+    /// The user's preferred language for TTS.
+    pub language: String,
+    /// The default level of detail for descriptions (0.0 to 1.0).
+    pub detail_level: f32,
+    // Add other preferences here, e.g., voice selection.
+}
+
+impl Default for UserPreferences {
+    fn default() -> Self {
+        Self {
+            language: "en-US".to_string(),
+            detail_level: 0.5,
+        }
+    }
+}
+
+/// Represents a location known to the system, with associated memories.
+#[derive(Debug, Clone)]
+pub struct KnownPlace {
+    pub name: String,
+    /// A list of memory fragment IDs associated with this place.
+    pub memory_ids: Vec<u64>,
+}
+
+/// Container for all data that is persisted to disk.
+#[derive(Debug, Clone, Default)]
+pub struct LongTermMemory {
+    pub preferences: UserPreferences,
+    pub known_places: Vec<KnownPlace>,
+}
+
 /// Represents errors that can occur within the Memory Manager.
 #[derive(Debug, Error)]
 pub enum MemoryError {
@@ -75,12 +111,53 @@ pub enum MemoryError {
     StorageFailed(String),
 }
 
+/// Manages very recent events to avoid repetition (e.g., repeated alerts).
+#[derive(Debug, Clone, Default)]
+pub struct ShortTermMemory {
+    /// Maps an alert key to the last time it was triggered.
+    recent_alerts: HashMap<String, DateTime<Utc>>,
+}
+
+impl ShortTermMemory {
+    /// Records that an alert has just been triggered.
+    pub fn record_alert(&mut self, alert_key: String) {
+        self.recent_alerts.insert(alert_key, Utc::now());
+    }
+
+    /// Checks if an alert with the given key has been triggered within the
+    /// specified duration.
+    pub fn has_been_alerted_recently(&self, alert_key: &str, duration_secs: i64) -> bool {
+        if let Some(last_alert_time) = self.recent_alerts.get(alert_key) {
+            let now = Utc::now();
+            let duration = chrono::Duration::seconds(duration_secs);
+            return now.signed_duration_since(*last_alert_time) < duration;
+        }
+        false
+    }
+
+    /// Records that an object has been mentioned to the user.
+    pub fn record_object_mentioned(&mut self, object_id: u64) {
+        let key = format!("object_mentioned_{}", object_id);
+        self.recent_alerts.insert(key, Utc::now());
+    }
+
+    /// Checks if an object has been mentioned within the specified duration.
+    pub fn was_object_mentioned_recently(&self, object_id: u64, duration_secs: i64) -> bool {
+        let key = format!("object_mentioned_{}", object_id);
+        self.has_been_alerted_recently(&key, duration_secs)
+    }
+}
+
 /// The main service for managing the AI's long-term memory.
 pub struct MemoryManager {
     /// The in-memory storage for memory fragments.
     /// The key is the memory ID. In a real implementation, this would be
     /// an interface to a persistent database.
     storage: HashMap<u64, MemoryFragment>,
+    /// The short-term memory component for handling recent events.
+    pub short_term_memory: ShortTermMemory,
+    /// The container for all data that gets saved to/loaded from disk.
+    long_term_memory: LongTermMemory,
     /// A simple counter to generate unique memory IDs.
     next_id: u64,
 }
@@ -91,8 +168,30 @@ impl MemoryManager {
         log::info!("Initializing new Memory Manager.");
         Self {
             storage: HashMap::new(),
+            short_term_memory: ShortTermMemory::default(),
+            long_term_memory: LongTermMemory::default(),
             next_id: 1,
         }
+    }
+
+    /// (Design) Saves the long-term memory to a file.
+    ///
+    /// In a real implementation, this would serialize the `LongTermMemory`
+    /// struct (likely as JSON or another format) and write it to disk.
+    pub fn save_to_disk(&self, _path: &std::path::Path) -> Result<(), MemoryError> {
+        log::info!("Simulating save of long-term memory to disk.");
+        // TODO: Implement serialization (e.g., with serde_json) and file I/O.
+        Ok(())
+    }
+
+    /// (Design) Loads the long-term memory from a file.
+    ///
+    /// In a real implementation, this would read from a file, deserialize
+    /// the data into the `LongTermMemory` struct, and populate the manager's state.
+    pub fn load_from_disk(&mut self, _path: &std::path::Path) -> Result<(), MemoryError> {
+        log::info!("Simulating load of long-term memory from disk.");
+        // TODO: Implement file reading and deserialization.
+        Ok(())
     }
 
     /// Archives a new piece of information into long-term memory.

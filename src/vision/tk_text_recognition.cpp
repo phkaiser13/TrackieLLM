@@ -550,72 +550,70 @@ static PIX* convert_to_pix(const tk_ocr_image_params_t* params) {
 /**
  * @brief Extracts text regions from Tesseract results
  */
-static tk_error_code_t extract_text_regions(tk_text_recognition_context_t* context, 
-                                          BOXA* boxes, 
-                                          const char* text, 
-                                          const int* confidences,
+static tk_error_code_t extract_text_regions(tk_text_recognition_context_t* context,
+                                          tesseract::TessBaseAPI* api,
                                           tk_ocr_text_region_t** out_regions, 
                                           size_t* out_count) {
-    if (!context || !boxes || !text || !out_regions || !out_count) {
+    if (!context || !api || !out_regions || !out_count) {
         return TK_ERROR_INVALID_ARGUMENT;
     }
-    
+
     *out_regions = nullptr;
     *out_count = 0;
-    
-    int box_count = boxaGetCount(boxes);
-    if (box_count <= 0) {
-        return TK_SUCCESS; // No regions found
+
+    tesseract::ResultIterator* ri = api->GetIterator();
+    if (!ri) {
+        return TK_SUCCESS; // No results
     }
-    
-    // Allocate array for regions
-    tk_ocr_text_region_t* regions = new tk_ocr_text_region_t[box_count];
-    if (!regions) {
+
+    std::vector<tk_ocr_text_region_t> regions_vec;
+    const tesseract::PageIteratorLevel level = tesseract::RIL_WORD;
+
+    do {
+        const char* word = ri->GetUTF8Text(level);
+        if (word == nullptr) continue;
+
+        float confidence = ri->Confidence(level);
+        int x1, y1, x2, y2;
+        ri->BoundingBox(level, &x1, &y1, &x2, &y2);
+
+        tk_ocr_text_region_t region;
+        memset(&region, 0, sizeof(tk_ocr_text_region_t));
+
+        region.x = x1;
+        region.y = y1;
+        region.width = x2 - x1;
+        region.height = y2 - y1;
+        region.confidence = confidence / 100.0f;
+        region.text = duplicate_string(word);
+        if (region.text) {
+            region.text_length = strlen(region.text);
+        }
+        
+        regions_vec.push_back(region);
+
+        delete[] word;
+    } while (ri->Next(level));
+
+    delete ri;
+
+    if (regions_vec.empty()) {
+        return TK_SUCCESS;
+    }
+
+    // Copy vector data to a C-style array
+    *out_count = regions_vec.size();
+    *out_regions = (tk_ocr_text_region_t*)malloc(regions_vec.size() * sizeof(tk_ocr_text_region_t));
+    if (!*out_regions) {
+        // Clean up already allocated strings in the vector
+        for(auto& region : regions_vec) {
+            free_string(region.text);
+        }
         return TK_ERROR_OUT_OF_MEMORY;
     }
-    
-    // Extract information for each region
-    for (int i = 0; i < box_count; i++) {
-        BOX* box = boxaGetBox(boxes, i, L_CLONE);
-        if (!box) continue;
-        
-        // Fill region information
-        regions[i].x = box->x;
-        regions[i].y = box->y;
-        regions[i].width = box->w;
-        regions[i].height = box->h;
-        regions[i].confidence = confidences ? (confidences[i] / 100.0f) : 0.0f;
-        regions[i].text = nullptr;
-        regions[i].text_length = 0;
-        regions[i].word_count = 0;
-        regions[i].line_count = 0;
-        regions[i].is_handwritten = false;
-        regions[i].is_mathematical = false;
-        regions[i].is_qr_code = false;
-        regions[i].is_barcode = false;
-        regions[i].font_name = nullptr;
-        regions[i].font_size = 0;
-        regions[i].is_bold = false;
-        regions[i].is_italic = false;
-        regions[i].is_underlined = false;
-        regions[i].color_fg = 0;
-        regions[i].color_bg = 0;
-        regions[i].orientation = 0;
-        regions[i].is_vertical = false;
-        regions[i].is_upside_down = false;
-        regions[i].language = nullptr;
-        regions[i].page_number = 0;
-        regions[i].block_number = 0;
-        regions[i].paragraph_number = 0;
-        regions[i].line_number = 0;
-        regions[i].word_number = 0;
-        
-        boxDestroy(&box);
-    }
-    
-    *out_regions = regions;
-    *out_count = box_count;
-    
+
+    memcpy(*out_regions, regions_vec.data(), regions_vec.size() * sizeof(tk_ocr_text_region_t));
+
     return TK_SUCCESS;
 }
 
@@ -1548,8 +1546,7 @@ tk_error_code_t tk_text_recognition_process_image(
     result->full_text_length = full_text_length;
     
     // Extract text regions
-    error = extract_text_regions(context, boxes, tess_text, confidences, 
-                                &result->regions, &result->region_count);
+    error = extract_text_regions(context, context->tess_api, &result->regions, &result->region_count);
     if (error != TK_SUCCESS) {
         delete[] tess_text;
         if (confidences) delete[] confidences;

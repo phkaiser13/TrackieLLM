@@ -139,6 +139,19 @@ pub struct tk_vision_result_fields {
     pub depth_map: *mut tk_vision_depth_map_t,
 }
 
+// --- Manually defined structs from other C headers ---
+
+/// C-compatible version of a single raw detection result from `tk_object_detector.h`.
+/// This is used as input to the Rust fusion logic.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct tk_detection_result_t {
+    pub class_id: u32,
+    pub label: *const c_char,
+    pub confidence: c_float,
+    pub bbox: tk_rect_t,
+}
+
 // --- FFI Function Declarations ---
 
 // Assuming tk_error_code_t is defined elsewhere, we'll use a placeholder.

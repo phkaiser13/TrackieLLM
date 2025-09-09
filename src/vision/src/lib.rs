@@ -151,3 +151,95 @@ impl Drop for VisionPipeline {
         }
     }
 }
+
+
+//------------------------------------------------------------------------------
+// FFI Interface for C -> Rust calls
+//------------------------------------------------------------------------------
+
+use crate::object_analysis::EnrichedObject;
+use std::os::raw::c_void;
+use std::slice;
+
+/// The C-compatible struct that is returned to the C layer.
+/// It contains a pointer to the fused object data and the count.
+#[repr(C)]
+pub struct CFusedResult {
+    pub objects: *const EnrichedObject,
+    pub count: usize,
+}
+
+/// Fuses object detections with a depth map. Called from C.
+///
+/// This function takes raw pointers from the C layer, converts them into safe
+/// Rust slices, calls the safe Rust fusion logic, and then prepares the
+/// result to be sent back to the C layer.
+///
+/// # Safety
+/// The caller MUST ensure that the pointers `detections_ptr` and `depth_map_ptr`
+/// are valid and point to the described data structures, and that `detection_count`
+/// is the correct number of elements in the `detections_ptr` array. The caller
+/// is also responsible for eventually calling `tk_vision_rust_free_fused_result`
+/// on the returned pointer to prevent a memory leak.
+#[no_mangle]
+pub unsafe extern "C" fn tk_vision_rust_fuse_data(
+    detections_ptr: *const ffi::tk_detection_result_t,
+    detection_count: usize,
+    depth_map_ptr: *const ffi::tk_vision_depth_map_t,
+    frame_width: u32,
+    frame_height: u32,
+    focal_length_x: f32,
+    focal_length_y: f32,
+) -> *mut CFusedResult {
+    // 1. Convert raw C pointers to safe Rust slices and references
+    if detections_ptr.is_null() || depth_map_ptr.is_null() {
+        return std::ptr::null_mut();
+    }
+    let detections = slice::from_raw_parts(detections_ptr, detection_count);
+    let depth_map = &*depth_map_ptr;
+
+    // 2. Call the safe, core logic
+    let enriched_objects_vec = object_analysis::fuse_object_and_depth_data(
+        detections,
+        depth_map,
+        frame_width,
+        frame_height,
+        focal_length_x,
+        focal_length_y
+    );
+
+    // 3. Prepare the data to be returned to C
+    let count = enriched_objects_vec.len();
+    // Prevent the vector's memory from being freed by Rust when it goes out of scope
+    let objects_ptr = enriched_objects_vec.leak().as_ptr();
+
+    let result = CFusedResult {
+        objects: objects_ptr,
+        count,
+    };
+
+    // Allocate memory for the result struct and return a pointer to it
+    Box::into_raw(Box::new(result))
+}
+
+/// Frees the memory allocated by `tk_vision_rust_fuse_data`.
+///
+/// # Safety
+/// This function should only be called with a pointer that was previously
+/// returned by `tk_vision_rust_fuse_data`. Calling it with any other pointer
+/// will lead to undefined behavior.
+#[no_mangle]
+pub unsafe extern "C" fn tk_vision_rust_free_fused_result(result_ptr: *mut CFusedResult) {
+    if result_ptr.is_null() {
+        return;
+    }
+    // Re-take ownership of the Box to allow it to be dropped, freeing the result struct
+    let result = Box::from_raw(result_ptr);
+
+    // Re-take ownership of the Vec to allow it to be dropped, freeing the object array
+    let _ = Vec::from_raw_parts(
+        result.objects as *mut EnrichedObject,
+        result.count,
+        result.count,
+    );
+}

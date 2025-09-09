@@ -438,12 +438,6 @@ static tk_error_code_t run_inference(tk_depth_estimator_t* estimator) {
         estimator->input_node_dims.size()
     );
     
-    // Prepare output tensor
-    float* output_tensor_values = (float*)malloc(estimator->output_tensor_size * sizeof(float));
-    if (!output_tensor_values) {
-        return TK_ERROR_OUT_OF_MEMORY;
-    }
-    
     // Run inference
     const char* input_names[] = { estimator->input_node_name };
     const char* output_names[] = { estimator->output_node_name };
@@ -465,17 +459,16 @@ static tk_error_code_t run_inference(tk_depth_estimator_t* estimator) {
         
         size_t output_data_size = output_tensor.GetTensorTypeAndShapeInfo().GetElementCount();
         if (output_data_size > estimator->output_tensor_size) {
+            tk_log_warn("Output data size (%zu) is larger than allocated buffer (%zu). Truncating.",
+                        output_data_size, estimator->output_tensor_size);
             output_data_size = estimator->output_tensor_size;
         }
         
         memcpy(estimator->raw_depth_values, output_data, output_data_size * sizeof(float));
     } catch (const Ort::Exception& e) {
         tk_log_error("ONNX Runtime inference error: %s", e.what());
-        free(output_tensor_values);
         return TK_ERROR_INFERENCE_FAILED;
     }
-    
-    free(output_tensor_values);
     return TK_SUCCESS;
 }
 

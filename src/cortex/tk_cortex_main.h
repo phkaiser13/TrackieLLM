@@ -36,6 +36,8 @@
 
 #include "utils/tk_error_handling.h"
 #include "internal_tools/tk_file_manager.h" // For tk_path_t
+#include "vision/tk_vision_pipeline.h" // For tk_vision_object_t
+#include "sensors/tk_sensors_fusion.h" // For tk_world_state_t
 
 // Forward-declare the main Cortex object as an opaque type to enforce encapsulation.
 typedef struct tk_cortex_s tk_cortex_t;
@@ -101,6 +103,59 @@ typedef struct {
     enum { TK_PIXEL_FORMAT_RGB8, TK_PIXEL_FORMAT_RGBA8 } format; /**< Pixel format of the data. */
     const uint8_t* data;            /**< Pointer to the raw pixel data. */
 } tk_video_frame_t;
+
+/**
+ * @struct tk_vision_event_t
+ * @brief Represents a vision event containing detected objects.
+ */
+typedef struct {
+    size_t object_count;                /**< Number of detected objects. */
+    const tk_vision_object_t* objects;  /**< Array of detected objects. */
+} tk_vision_event_t;
+
+/**
+ * @struct tk_audio_event_t
+ * @brief Represents an audio event containing transcribed text.
+ */
+typedef struct {
+    const char* text;                   /**< The transcribed text. */
+} tk_audio_event_t;
+
+/**
+ * @struct tk_sensor_event_t
+ * @brief Represents a sensor event containing the world state.
+ */
+typedef struct {
+    tk_world_state_t world_state;       /**< The fused sensor data. */
+} tk_sensor_event_t;
+
+/**
+ * @enum tk_event_type_e
+ * @brief Defines the type of event being sent to the Cortex.
+ */
+typedef enum {
+    TK_EVENT_TYPE_NONE,
+    TK_EVENT_TYPE_VISION,
+    TK_EVENT_TYPE_AUDIO,
+    TK_EVENT_TYPE_SENSORS
+} tk_event_type_e;
+
+/**
+ * @struct tk_event_t
+ * @brief A generic event structure that can hold any type of event data.
+ *
+ * This is the primary structure used to pass information into the main
+ * Cortex event loop.
+ */
+typedef struct {
+    tk_event_type_e type;
+    uint64_t timestamp_ns;
+    union {
+        tk_vision_event_t vision_event;
+        tk_audio_event_t audio_event;
+        tk_sensor_event_t sensor_event;
+    } data;
+} tk_event_t;
 
 /**
  * @brief Callback function pointer for state change notifications.

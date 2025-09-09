@@ -50,6 +50,13 @@ static void event_payload_free(tk_cortex_event_type_e type, void* payload);
 static tk_error_code_t deep_copy_vision_result(tk_vision_result_t** dest, const tk_vision_result_t* src);
 static tk_error_code_t deep_copy_transcription(tk_transcription_t** dest, const tk_transcription_t* src);
 
+// Forward-declare the Rust FFI function for processing generic events
+extern void tk_cortex_rust_process_event(const tk_event_t* event);
+// Forward-declare the Rust FFI function for initializing the reasoner
+extern void tk_cortex_rust_init_reasoner(tk_contextual_reasoner_t* reasoner);
+// Forward-declare the Rust FFI function for running the rules engine
+extern bool tk_cortex_reasoner_run_rules(char* out_alert_buffer, size_t buffer_size);
+
 
 //------------------------------------------------------------------------------
 // Event System Definitions
@@ -65,7 +72,8 @@ typedef enum {
     CORTEX_EVENT_VAD_SPEECH_STARTED,
     CORTEX_EVENT_SIGNIFICANT_VISION_CHANGE,
     CORTEX_EVENT_SYSTEM_TIMER,
-    CORTEX_EVENT_SHUTDOWN
+    CORTEX_EVENT_SHUTDOWN,
+    CORTEX_EVENT_GENERIC_INPUT // New event type for our generic tk_event_t
 } tk_cortex_event_type_e;
 
 /**
@@ -759,6 +767,9 @@ static tk_error_code_t cortex_initialize_subsystems(tk_cortex_t* cortex) {
         return result;
     }
     
+    // Initialize the Rust-side reasoner and its WorldModel state
+    tk_cortex_rust_init_reasoner(cortex->contextual_reasoner);
+
     // Initialize decision engine
     tk_decision_config_t decision_config = {
         .action_confidence_threshold = 0.7f,
@@ -909,8 +920,60 @@ static void* cortex_main_loop_thread(void* arg) {
     return NULL;
 }
 
+/**
+ * @brief Handles a generic tk_event_t, logging its reception.
+ *
+ * This is the implementation for Task 1.2. It takes a generic event,
+ * identifies its type, and logs a confirmation message.
+ *
+ * @param cortex The Cortex instance.
+ * @param event The generic event to process.
+ * @return TK_SUCCESS.
+ */
+static tk_error_code_t cortex_handle_generic_event(tk_cortex_t* cortex, const tk_event_t* event) {
+    if (!cortex || !event) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+
+    // First, log the event on the C side as per the original implementation
+    switch (event->type) {
+        case TK_EVENT_TYPE_VISION:
+            tk_log_info("Cortex-C: Received Vision Event with %zu objects.", event->data.vision_event.object_count);
+            break;
+        case TK_EVENT_TYPE_AUDIO:
+            tk_log_info("Cortex-C: Received Audio Event with text: \"%s\"", event->data.audio_event.text);
+            break;
+        case TK_EVENT_TYPE_SENSORS:
+            tk_log_info("Cortex-C: Received Sensor Event with motion state: %d", event->data.sensor_event.world_state.motion_state);
+            break;
+        case TK_EVENT_TYPE_NONE:
+        default:
+            tk_log_warning("Cortex-C: Received an unknown or NONE event type: %d", event->type);
+            break;
+    }
+
+    // Now, pass the event to the Rust layer via FFI for processing there
+    tk_cortex_rust_process_event(event);
+
+    // After processing a vision event, run the simple rules engine
+    if (event->type == TK_EVENT_TYPE_VISION) {
+        char alert_buffer[256];
+        if (tk_cortex_reasoner_run_rules(alert_buffer, sizeof(alert_buffer))) {
+            tk_log_info("Cortex-C: Rule-based alert received: \"%s\"", alert_buffer);
+        }
+    }
+
+    return TK_SUCCESS;
+}
+
 static tk_error_code_t cortex_handle_event(tk_cortex_t* cortex, const tk_cortex_event_t* event) {
     switch (event->type) {
+        case CORTEX_EVENT_GENERIC_INPUT: {
+            // The payload of this event is expected to be a tk_event_t*
+            tk_event_t* generic_event = (tk_event_t*)event->payload;
+            return cortex_handle_generic_event(cortex, generic_event);
+        }
+
         case CORTEX_EVENT_NEW_VIDEO_FRAME:
             return cortex_process_vision_input(cortex);
             
