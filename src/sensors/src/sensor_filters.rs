@@ -114,6 +114,53 @@ impl Filter for ComplementaryFilter {
     }
 }
 
+/// A simple first-order IIR (Infinite Impulse Response) low-pass filter.
+///
+/// This filter smooths a signal by taking a weighted average of the current
+/// input and the previous filtered output. It's computationally cheap and
+/// effective at reducing high-frequency noise.
+///
+/// The filter equation is:
+///   y[n] = alpha * x[n] + (1 - alpha) * y[n-1]
+/// where:
+///   y[n] is the current filtered output.
+///   x[n] is the current raw input.
+///   y[n-1] is the previous filtered output.
+///   alpha is the smoothing factor (0.0 < alpha <= 1.0).
+pub struct LowPassFilter {
+    /// The previous output of the filter.
+    prev_output: f32,
+    /// The smoothing factor (alpha). A smaller alpha results in more smoothing.
+    alpha: f32,
+}
+
+impl LowPassFilter {
+    /// Creates a new `LowPassFilter`.
+    ///
+    /// # Arguments
+    /// * `alpha` - The smoothing factor. Must be between 0.0 and 1.0.
+    /// * `initial_value` - The initial value to prime the filter with.
+    pub fn new(alpha: f32, initial_value: f32) -> Self {
+        Self {
+            prev_output: initial_value,
+            alpha: alpha.clamp(0.0, 1.0),
+        }
+    }
+
+    /// Applies the filter to a new input value.
+    ///
+    /// # Arguments
+    /// * `input` - The new raw value to filter.
+    ///
+    /// # Returns
+    /// The new filtered value.
+    pub fn apply(&mut self, input: f32) -> f32 {
+        let output = self.alpha * input + (1.0 - self.alpha) * self.prev_output;
+        self.prev_output = output;
+        output
+    }
+}
+
 
 /// A placeholder for a future Kalman Filter implementation.
 ///

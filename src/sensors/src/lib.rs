@@ -88,6 +88,8 @@ mod ffi {
 
 // --- Public Module Declarations ---
 
+/// Provides the C-callable FFI functions for sensor processing.
+pub mod ffi_bridge;
 /// Provides safe wrappers for the sensor fusion engine.
 pub mod sensor_fusion;
 /// Contains Rust-native implementations of sensor data filters.
@@ -110,7 +112,7 @@ pub enum MotionState {
 }
 
 /// The fused, high-level output of the sensor fusion engine.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct WorldState {
     /// The absolute orientation of the device in space, represented as a quaternion.
     pub orientation: Quaternion<f32>,

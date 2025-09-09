@@ -30,8 +30,20 @@
 
 use std::sync::Arc;
 use tokio::sync::broadcast::{self, Receiver, Sender};
+use trackiellm_sensors::WorldState;
+use trackiellm_navigation::{SpaceSector, TrackedObstacle};
+
 
 // --- Public Data Structures ---
+
+/// Contains the combined output of the navigation analysis modules.
+#[derive(Debug, Clone)]
+pub struct NavigationData {
+    /// A sector-based analysis of clear paths.
+    pub free_space_sectors: Vec<SpaceSector>,
+    /// A list of all currently tracked obstacles.
+    pub tracked_obstacles: Vec<TrackedObstacle>,
+}
 
 /// A simplified representation of a detected object.
 ///
@@ -57,12 +69,16 @@ pub struct VisionData {
 
 /// Defines all possible events that can be broadcast across the application.
 ///
-/// Using `Arc` for `VisionData` to avoid deep cloning the entire vector of
+/// Using `Arc` for data payloads to avoid deep cloning the entire vector of
 /// objects for every subscriber.
 #[derive(Debug, Clone)]
 pub enum TrackieEvent {
     /// Published by the vision worker when a new frame has been analyzed.
     VisionResult(Arc<VisionData>),
+    /// Published by the sensor fusion service when the world state is updated.
+    SensorFusionResult(Arc<WorldState>),
+    /// Published by the navigation engines when spatial analysis is complete.
+    NavigationResult(Arc<NavigationData>),
     /// Published by the audio worker when a full sentence has been transcribed.
     TranscriptionResult(String),
     /// Published by the audio worker to signal voice activity. `true` for speech

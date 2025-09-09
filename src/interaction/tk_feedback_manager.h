@@ -45,6 +45,16 @@ typedef enum {
 } tk_feedback_priority_e;
 
 /**
+ * @enum tk_feedback_type_e
+ * @brief Defines the physical modality of the feedback.
+ */
+typedef enum {
+    TK_FEEDBACK_TYPE_AUDIO,         /**< Audio-only feedback (TTS). */
+    TK_FEEDBACK_TYPE_HAPTIC,        /**< Haptic-only feedback (vibration). */
+    TK_FEEDBACK_TYPE_AUDIO_HAPTIC   /**< Both audio and haptic feedback. */
+} tk_feedback_type_e;
+
+/**
  * @enum tk_feedback_verbosity_e
  * @brief Defines verbosity levels to categorize and filter messages.
  */
@@ -80,7 +90,8 @@ typedef struct {
  * @brief A rich structure describing a single feedback request.
  */
 typedef struct {
-    const char*              text;          /**< The text content of the message. */
+    const char*              text;          /**< The text content of the message. Can be NULL for haptic-only feedback. */
+    tk_feedback_type_e       type;          /**< The modality of the feedback (audio, haptic, etc.). */
     tk_feedback_priority_e   priority;      /**< The priority of the message. */
     tk_feedback_verbosity_e  verbosity_level; /**< The minimum verbosity level at which this message should be played. */
     

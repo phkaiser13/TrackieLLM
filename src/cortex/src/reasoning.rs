@@ -26,6 +26,7 @@
 
 use super::{ffi, CortexError};
 use super::memory_manager::MemoryManager;
+use trackiellm_event_bus::NavigationData;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::ptr::null_mut;
@@ -110,6 +111,32 @@ impl Drop for ReasonerContext {
             // The Cortex owns the reasoner, so it's responsible for destroying it.
             // This Drop impl is just for correctness in case this struct is ever
             // used in a standalone way.
+        }
+    }
+
+    /// Translates a navigation direction angle into a user-friendly instruction.
+    ///
+    /// # Arguments
+    /// * `path_found` - A boolean indicating if a clear path was found.
+    /// * `path_direction_deg` - The direction of the clear path, in degrees.
+    ///
+    /// # Returns
+    /// A `String` containing the verbal instruction.
+    pub fn generate_path_instruction(
+        &self,
+        path_found: bool,
+        path_direction_deg: f32,
+    ) -> String {
+        if !path_found {
+            return "Pare, recalculando rota.".to_string();
+        }
+
+        if path_direction_deg < -15.0 {
+            "Vire levemente à esquerda.".to_string()
+        } else if path_direction_deg > 15.0 {
+            "Vire levemente à direita.".to_string()
+        } else {
+            "Siga em frente.".to_string()
         }
     }
 }
@@ -347,6 +374,53 @@ impl ContextualReasoner {
         }
 
         // No rules triggered
+        None
+    }
+
+    /// Runs a set of simple, hard-coded rules against the navigation data.
+    ///
+    /// This method checks for immediate hazards based on the geometric analysis
+    /// from the navigation modules.
+    ///
+    /// # Arguments
+    /// * `nav_data` - The latest navigation data from the event bus.
+    ///
+    /// # Returns
+    /// An `Option<String>` containing a critical alert message if a hazard
+    /// is detected, or `None`.
+    pub fn run_navigation_rules(&mut self, nav_data: &NavigationData) -> Option<String> {
+        const OBSTACLE_ALERT_THRESHOLD_M: f32 = 2.0;
+        const OBSTACLE_ALERT_COOLDOWN_SECS: i64 = 5;
+
+        let closest_obstacle = nav_data
+            .tracked_obstacles
+            .iter()
+            .min_by(|a, b| {
+                let dist_a = a.position_m.x.hypot(a.position_m.y);
+                let dist_b = b.position_m.x.hypot(b.position_m.y);
+                dist_a.partial_cmp(&dist_b).unwrap_or(std::cmp::Ordering::Equal)
+            });
+
+        if let Some(obstacle) = closest_obstacle {
+            let distance = obstacle.position_m.x.hypot(obstacle.position_m.y);
+            if distance < OBSTACLE_ALERT_THRESHOLD_M {
+                let alert_key = format!("obstacle_close_{}", obstacle.id);
+
+                if !self.memory_manager.short_term_memory.has_been_alerted_recently(
+                    &alert_key,
+                    OBSTACLE_ALERT_COOLDOWN_SECS,
+                ) {
+                    self.memory_manager.short_term_memory.record_alert(alert_key);
+                    // The plan asks for the message in Portuguese.
+                    let alert = format!(
+                        "Atenção, obstáculo à sua frente a {:.1} metros.",
+                        distance
+                    );
+                    return Some(alert);
+                }
+            }
+        }
+
         None
     }
 
