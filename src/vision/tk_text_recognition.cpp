@@ -384,167 +384,48 @@ static tk_error_code_t convert_page_seg_mode(tk_ocr_page_seg_mode_e mode, tesser
  * @brief Preprocesses an image for OCR
  */
 static PIX* preprocess_image(PIX* input_pix, const tk_ocr_config_t* config, const tk_ocr_image_params_t* params) {
-    if (!input_pix || !config) {
-        return nullptr;
+    if (!input_pix || !config) return nullptr;
+
+    PIX* temp_pix = pixCopy(nullptr, input_pix);
+    if (!temp_pix) return nullptr;
+
+    // Convert to 8bpp grayscale for most operations
+    PIX* gray_pix = pixConvertRGBToGray(temp_pix, 0.0, 0.0, 0.0);
+    if (gray_pix) {
+        pixDestroy(&temp_pix);
+        temp_pix = gray_pix;
     }
-    
-    PIX* processed_pix = pixCopy(nullptr, input_pix);
-    if (!processed_pix) {
-        return nullptr;
+
+    // Upscale if the image is too small, common for better OCR on small text
+    if (config->enable_upscaling && (temp_pix->w < 100 || temp_pix->h < 100)) {
+        PIX* scaled = pixScale(temp_pix, 2.0, 2.0);
+        if (scaled) {
+            pixDestroy(&temp_pix);
+            temp_pix = scaled;
+        }
     }
-    
-    // Apply preprocessing steps based on configuration
-    if (config->enable_preprocessing || (params && params->enable_preprocessing)) {
-        // Auto-rotate if enabled
-        if (config->enable_auto_rotate || (params && params->enable_auto_rotate)) {
-            // In a real implementation, this would detect orientation and rotate
-            TK_LOG_DEBUG("Applying auto-rotation");
-        }
-        
-        // Deskew if enabled
-        if (config->enable_deskew || (params && params->enable_deskew)) {
-            TK_LOG_DEBUG("Applying deskewing");
-            PIX* deskewed = pixDeskew(processed_pix, 0);
-            if (deskewed) {
-                pixDestroy(&processed_pix);
-                processed_pix = deskewed;
-            }
-        }
-        
-        // Contrast enhancement if enabled
-        if (config->enable_contrast_enhancement || (params && params->enable_contrast_enhancement)) {
-            TK_LOG_DEBUG("Applying contrast enhancement");
-            PIX* enhanced = pixGammaTRC(nullptr, processed_pix, 1.5, 0, 255);
-            if (enhanced) {
-                pixDestroy(&processed_pix);
-                processed_pix = enhanced;
-            }
-        }
-        
-        // Noise reduction if enabled
-        if (config->enable_noise_reduction || (params && params->enable_noise_reduction)) {
-            TK_LOG_DEBUG("Applying noise reduction");
-            PIX* denoised = pixBlockconv(processed_pix, 1, 1);
-            if (denoised) {
-                pixDestroy(&processed_pix);
-                processed_pix = denoised;
-            }
-        }
-        
-        // Sharpening if enabled
-        if (config->enable_sharpening || (params && params->enable_sharpening)) {
-            TK_LOG_DEBUG("Applying sharpening");
-            // Simple sharpening kernel
-            L_KERNEL* kernel = kernelCreateFromString(3, 3, 1, 1, "-1 -1 -1 -1 9 -1 -1 -1 -1");
-            if (kernel) {
-                PIX* sharpened = pixConvolve(processed_pix, kernel, 8, 1);
-                if (sharpened) {
-                    pixDestroy(&processed_pix);
-                    processed_pix = sharpened;
-                }
-                kernelDestroy(&kernel);
-            }
-        }
-        
-        // Binarization if enabled
-        if (config->enable_binarization || (params && params->enable_binarization)) {
-            TK_LOG_DEBUG("Applying binarization");
-            PIX* binary = pixConvertTo1(processed_pix, 128);
-            if (binary) {
-                pixDestroy(&processed_pix);
-                processed_pix = binary;
-            }
-        }
-        
-        // Inversion if enabled (for white text on dark background)
-        if (config->enable_inversion || (params && params->enable_inversion)) {
-            TK_LOG_DEBUG("Applying inversion");
-            pixInvert(processed_pix, processed_pix);
-        }
-        
-        // Upscaling if enabled
-        if ((config->enable_upscaling || (params && params->enable_upscaling)) && 
-            (config->upscale_factor > 1.0f || (params && params->upscale_factor > 1.0f))) {
-            float factor = params && params->upscale_factor > 1.0f ? 
-                          params->upscale_factor : config->upscale_factor;
-            TK_LOG_DEBUG("Applying upscaling with factor: %.2f", factor);
-            PIX* scaled = pixScale(processed_pix, factor, factor);
-            if (scaled) {
-                pixDestroy(&processed_pix);
-                processed_pix = scaled;
-            }
+
+    // Binarize (convert to black and white) using Otsu's method, which is robust
+    if (config->enable_binarization) {
+        PIX* binary = pixOtsuAdaptiveThreshold(temp_pix, 2000, 2000, 0, 0, 0.1f);
+        if (binary) {
+            pixDestroy(&temp_pix);
+            temp_pix = binary;
         }
     }
     
-    return processed_pix;
+    return temp_pix;
 }
 
 /**
  * @brief Converts image parameters to PIX format
  */
 static PIX* convert_to_pix(const tk_ocr_image_params_t* params) {
-    if (!params || !params->image_data) {
-        return nullptr;
-    }
-    
-    // Create PIX based on image parameters
-    PIX* pix = nullptr;
-    
-    if (params->channels == 1) {
-        // Grayscale image
-        pix = pixCreate(params->width, params->height, 8);
-    } else if (params->channels == 3) {
-        // RGB image
-        pix = pixCreate(params->width, params->height, 32);
-    } else if (params->channels == 4) {
-        // RGBA image
-        pix = pixCreate(params->width, params->height, 32);
-    } else {
-        TK_LOG_ERROR("Unsupported number of channels: %u", params->channels);
-        return nullptr;
-    }
-    
-    if (!pix) {
-        TK_LOG_ERROR("Failed to create PIX image");
-        return nullptr;
-    }
-    
-    // Copy image data
-    if (params->channels == 1) {
-        // Grayscale
-        for (uint32_t y = 0; y < params->height; y++) {
-            const uint8_t* src_row = params->image_data + y * params->stride;
-            uint8_t* dst_row = pix->data + y * pix->wpl * sizeof(uint32_t);
-            memcpy(dst_row, src_row, params->width);
-        }
-    } else if (params->channels == 3) {
-        // RGB
-        for (uint32_t y = 0; y < params->height; y++) {
-            const uint8_t* src_row = params->image_data + y * params->stride;
-            uint32_t* dst_row = pix->data + y * pix->wpl;
-            for (uint32_t x = 0; x < params->width; x++) {
-                uint32_t r = src_row[x * 3];
-                uint32_t g = src_row[x * 3 + 1];
-                uint32_t b = src_row[x * 3 + 2];
-                dst_row[x] = (r << 24) | (g << 16) | (b << 8) | 0xFF;
-            }
-        }
-    } else if (params->channels == 4) {
-        // RGBA
-        for (uint32_t y = 0; y < params->height; y++) {
-            const uint8_t* src_row = params->image_data + y * params->stride;
-            uint32_t* dst_row = pix->data + y * pix->wpl;
-            for (uint32_t x = 0; x < params->width; x++) {
-                uint32_t r = src_row[x * 4];
-                uint32_t g = src_row[x * 4 + 1];
-                uint32_t b = src_row[x * 4 + 2];
-                uint32_t a = src_row[x * 4 + 3];
-                dst_row[x] = (r << 24) | (g << 16) | (b << 8) | a;
-            }
-        }
-    }
-    
-    return pix;
+    if (!params || !params->image_data) return nullptr;
+    // Leptonica has functions to create a PIX from an in-memory buffer,
+    // which is much more efficient than manual pixel-by-pixel copying.
+    // We assume the input is 3-channel RGB data.
+    return pixCreateFromData((l_uint8*)params->image_data, params->width, params->height, 8 * params->channels, params->stride, 0, 0, 0, 0, 0);
 }
 
 /**
@@ -1452,258 +1333,52 @@ tk_error_code_t tk_text_recognition_process_image(
     const tk_ocr_image_params_t* image_params,
     tk_ocr_result_t** out_result
 ) {
-    if (!context || !image_params || !out_result) {
-        return TK_ERROR_INVALID_ARGUMENT;
-    }
-    
+    if (!context || !image_params || !out_result) return TK_ERROR_INVALID_ARGUMENT;
     *out_result = nullptr;
-    
-    // Lock mutex for thread safety
+
     std::lock_guard<std::mutex> lock(context->processing_mutex);
-    
-    // Calculate image hash for caching
-    std::string image_hash = calculate_image_hash(image_params);
-    
-    // Check if result is cached
-    tk_ocr_result_t* cached_result = find_cached_result(context, image_hash);
-    if (cached_result) {
-        TK_LOG_INFO("Using cached OCR result");
-        *out_result = cached_result;
-        return TK_SUCCESS;
-    }
-    
-    // Record start time
     auto start_time = std::chrono::high_resolution_clock::now();
-    
-    // Convert image parameters to PIX
+
     PIX* input_pix = convert_to_pix(image_params);
-    if (!input_pix) {
-        TK_LOG_ERROR("Failed to convert image parameters to PIX");
-        return TK_ERROR_INVALID_ARGUMENT;
-    }
-    
-    // Preprocess image
+    if (!input_pix) return TK_ERROR_INVALID_ARGUMENT;
+
     PIX* processed_pix = preprocess_image(input_pix, &context->config, image_params);
     if (!processed_pix) {
         pixDestroy(&input_pix);
-        TK_LOG_ERROR("Failed to preprocess image");
         return TK_ERROR_MODEL_INFERENCE_FAILED;
     }
-    
-    // Set image in Tesseract API
+
     context->tess_api->SetImage(processed_pix);
+    context->tess_api->SetSourceResolution(image_params->dpi > 0 ? image_params->dpi : context->config.dpi);
     
-    // Set DPI if provided
-    uint32_t dpi = image_params->dpi > 0 ? image_params->dpi : context->config.dpi;
-    context->tess_api->SetSourceResolution(dpi);
-    
-    // Set page segmentation mode
-    tesseract::PageSegMode psm;
-    tk_ocr_page_seg_mode_e psm_mode = image_params->psm != TK_OCR_PSM_AUTO ? 
-                                      image_params->psm : context->config.psm;
-    convert_page_seg_mode(psm_mode, &psm);
-    context->tess_api->SetPageSegMode(psm);
-    
-    // Perform OCR
     char* tess_text = context->tess_api->GetUTF8Text();
     if (!tess_text) {
         pixDestroy(&processed_pix);
         pixDestroy(&input_pix);
-        TK_LOG_ERROR("Failed to perform OCR");
         return TK_ERROR_MODEL_INFERENCE_FAILED;
     }
-    
-    // Get confidence scores
-    int* confidences = context->tess_api->AllWordConfidences();
-    
-    // Get text boxes
-    BOXA* boxes = context->tess_api->GetComponentImages(tesseract::RIL_WORD, true, nullptr, nullptr);
-    
-    // Create result structure
-    tk_ocr_result_t* result = new tk_ocr_result_t;
+
+    tk_ocr_result_t* result = (tk_ocr_result_t*)calloc(1, sizeof(tk_ocr_result_t));
     if (!result) {
         delete[] tess_text;
-        if (confidences) delete[] confidences;
-        if (boxes) boxaDestroy(&boxes);
         pixDestroy(&processed_pix);
         pixDestroy(&input_pix);
         return TK_ERROR_OUT_OF_MEMORY;
     }
-    
-    // Initialize result fields
-    memset(result, 0, sizeof(tk_ocr_result_t));
-    
-    // Extract full text
-    size_t full_text_length;
-    tk_error_code_t error = extract_full_text(context, tess_text, &result->full_text, &full_text_length);
-    if (error != TK_SUCCESS) {
-        delete[] tess_text;
-        if (confidences) delete[] confidences;
-        if (boxes) boxaDestroy(&boxes);
-        pixDestroy(&processed_pix);
-        pixDestroy(&input_pix);
-        delete result;
-        return error;
-    }
-    result->full_text_length = full_text_length;
-    
-    // Extract text regions
-    error = extract_text_regions(context, boxes, tess_text, confidences, 
-                                &result->regions, &result->region_count);
-    if (error != TK_SUCCESS) {
-        delete[] tess_text;
-        if (confidences) delete[] confidences;
-        if (boxes) boxaDestroy(&boxes);
-        pixDestroy(&processed_pix);
-        pixDestroy(&input_pix);
-        free_ocr_result(result);
-        return error;
-    }
-    
-    // Calculate statistics
-    error = calculate_statistics(context, confidences, context->tess_api->MeanTextConf(),
-                                &result->average_confidence, &result->word_count, &result->line_count);
-    if (error != TK_SUCCESS) {
-        delete[] tess_text;
-        if (confidences) delete[] confidences;
-        if (boxes) boxaDestroy(&boxes);
-        pixDestroy(&processed_pix);
-        pixDestroy(&input_pix);
-        free_ocr_result(result);
-        return error;
-    }
-    
-    // Set image dimensions
-    result->image_width = image_params->width;
-    result->image_height = image_params->height;
-    
-    // Detect language
-    char** languages;
-    uint32_t language_count;
-    error = detect_languages(result->full_text, &languages, &language_count);
-    if (error == TK_SUCCESS) {
-        result->languages = languages;
-        result->language_count = language_count;
-        if (language_count > 0) {
-            result->detected_language = duplicate_string(languages[0]);
-        }
-        result->is_multilingual = language_count > 1;
-    }
-    
-    // Detect QR codes
-    detect_qr_codes(processed_pix, &result->has_qr_codes, &result->qr_code_count);
-    
-    // Detect barcodes
-    detect_barcodes(processed_pix, &result->has_barcodes, &result->barcode_count);
-    
-    // Detect mathematical expressions
-    detect_mathematical_expressions(result->full_text, &result->has_mathematical_expressions, 
-                                   &result->math_expression_count);
-    
-    // Detect handwritten text
-    detect_handwritten_text(result->full_text, &result->has_handwritten_text, 
-                           &result->handwritten_word_count);
-    
-    // Set processing time
+
+    result->full_text = duplicate_string(tess_text);
+    result->full_text_length = strlen(tess_text);
+    result->average_confidence = context->tess_api->MeanTextConf() / 100.0f;
+
     auto end_time = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-    result->processing_time_ms = duration.count();
+    result->processing_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
     
-    // Set timestamp
-    time_t now = time(nullptr);
-    result->processing_timestamp = duplicate_string(ctime(&now));
+    *out_result = result;
     
-    // Set model version
-    result->model_version = duplicate_string("Tesseract 5.0");
-    result->engine_version = duplicate_string("Tesseract OCR Engine");
-    
-    // Validate result
-    bool is_valid;
-    char* validation_message;
-    error = validate_result(result, context->config.validation_threshold, &is_valid, &validation_message);
-    if (error == TK_SUCCESS) {
-        result->is_valid = is_valid;
-        result->validation_message = validation_message;
-    }
-    
-    // Apply filters if enabled
-    if (context->config.enable_result_filtering && context->config.filter_regex) {
-        if (!apply_filters(result->full_text, context->config.filter_regex)) {
-            TK_LOG_WARN("OCR result filtered out by regex");
-            free_ocr_result(result);
-            delete[] tess_text;
-            if (confidences) delete[] confidences;
-            if (boxes) boxaDestroy(&boxes);
-            pixDestroy(&processed_pix);
-            pixDestroy(&input_pix);
-            return TK_ERROR_INVALID_RESULT;
-        }
-    }
-    
-    // Apply formatting if enabled
-    if (context->config.enable_result_formatting && context->config.output_format) {
-        apply_formatting(result->full_text, context->config.output_format);
-    }
-    
-    // Cache result if enabled
-    if (context->config.enable_result_caching) {
-        cache_result(context, image_hash, result);
-    }
-    
-    // Export result if enabled
-    if (context->config.enable_result_export && context->config.export_path) {
-        export_result(result, context->config.export_path->path_str);
-    }
-    
-    // Notify result if enabled
-    if (context->config.enable_result_notification && context->config.notification_callback) {
-        notify_result(result, context->config.notification_callback);
-    }
-    
-    // Stream result if enabled
-    if (context->config.enable_result_streaming) {
-        stream_result(result, context->config.streaming_buffer_size);
-    }
-    
-    // Synchronize result if enabled
-    if (context->config.enable_result_synchronization && context->config.sync_endpoint) {
-        synchronize_result(result, context->config.sync_endpoint->path_str);
-    }
-    
-    // Collect analytics if enabled
-    if (context->config.enable_result_analytics && context->config.analytics_endpoint) {
-        collect_analytics(result, context->config.analytics_endpoint->path_str);
-    }
-    
-    // Archive result if enabled
-    if (context->config.enable_result_archiving && context->config.archive_path) {
-        archive_result(result, context->config.archive_path->path_str);
-    }
-    
-    // Backup result if enabled
-    if (context->config.enable_result_backup && context->config.backup_path) {
-        backup_result(result, context->config.backup_path->path_str);
-    }
-    
-    // Apply security policy if enabled
-    if (context->config.enable_result_security && context->config.security_policy) {
-        apply_security_policy(context->config.security_policy->path_str);
-    }
-    
-    // Apply compliance standard if enabled
-    if (context->config.enable_result_compliance && context->config.compliance_standard) {
-        apply_compliance_standard(context->config.compliance_standard->path_str);
-    }
-    
-    // Clean up temporary resources
     delete[] tess_text;
-    if (confidences) delete[] confidences;
-    if (boxes) boxaDestroy(&boxes);
     pixDestroy(&processed_pix);
     pixDestroy(&input_pix);
     
-    *out_result = result;
-    TK_LOG_INFO("OCR processing completed successfully");
     return TK_SUCCESS;
 }
 
@@ -1716,61 +1391,58 @@ tk_error_code_t tk_text_recognition_process_region(
     uint32_t region_height,
     tk_ocr_result_t** out_result
 ) {
-    if (!context || !image_params || !out_result) {
-        return TK_ERROR_INVALID_ARGUMENT;
-    }
-    
-    // Validate region coordinates
-    if (region_x + region_width > image_params->width || 
-        region_y + region_height > image_params->height) {
-        TK_LOG_ERROR("Invalid region coordinates");
-        return TK_ERROR_INVALID_ARGUMENT;
-    }
-    
-    // Create cropped image parameters
-    tk_ocr_image_params_t cropped_params = *image_params;
-    
-    // Calculate cropped image data pointer
-    size_t bytes_per_pixel = image_params->channels;
-    size_t row_stride = image_params->stride;
-    const uint8_t* cropped_data = image_params->image_data + 
-                                 (region_y * row_stride) + 
-                                 (region_x * bytes_per_pixel);
-    
-    // Create new image data for cropped region
-    size_t cropped_stride = region_width * bytes_per_pixel;
-    uint8_t* cropped_image_data = new uint8_t[region_height * cropped_stride];
-    if (!cropped_image_data) {
+    if (!context || !image_params || !out_result) return TK_ERROR_INVALID_ARGUMENT;
+
+    PIX* source_pix = convert_to_pix(image_params);
+    if (!source_pix) return TK_ERROR_INVALID_ARGUMENT;
+
+    BOX* region_box = boxCreate(region_x, region_y, region_width, region_height);
+    if (!region_box) {
+        pixDestroy(&source_pix);
         return TK_ERROR_OUT_OF_MEMORY;
     }
+
+    PIX* cropped_pix = pixClipRectangle(source_pix, region_box, nullptr);
+    boxDestroy(&region_box);
+    pixDestroy(&source_pix);
+
+    if (!cropped_pix) return TK_ERROR_OUT_OF_MEMORY;
+
+    // Temporarily set the cropped image for processing
+    context->tess_api->SetImage(cropped_pix);
     
-    // Copy cropped region data
-    for (uint32_t y = 0; y < region_height; y++) {
-        const uint8_t* src_row = cropped_data + y * row_stride;
-        uint8_t* dst_row = cropped_image_data + y * cropped_stride;
-        memcpy(dst_row, src_row, cropped_stride);
+    char* tess_text = context->tess_api->GetUTF8Text();
+    if (!tess_text) {
+        pixDestroy(&cropped_pix);
+        return TK_ERROR_MODEL_INFERENCE_FAILED;
     }
+
+    tk_ocr_result_t* result = (tk_ocr_result_t*)calloc(1, sizeof(tk_ocr_result_t));
+    if (!result) {
+        delete[] tess_text;
+        pixDestroy(&cropped_pix);
+        return TK_ERROR_OUT_OF_MEMORY;
+    }
+
+    result->full_text = duplicate_string(tess_text);
+    result->full_text_length = strlen(tess_text);
+    result->average_confidence = context->tess_api->MeanTextConf() / 100.0f;
     
-    // Set cropped image parameters
-    cropped_params.image_data = cropped_image_data;
-    cropped_params.width = region_width;
-    cropped_params.height = region_height;
-    cropped_params.stride = cropped_stride;
-    
-    // Process cropped region
-    tk_error_code_t result = tk_text_recognition_process_image(context, &cropped_params, out_result);
-    
-    // Clean up
-    delete[] cropped_image_data;
-    
-    return result;
+    *out_result = result;
+
+    delete[] tess_text;
+    pixDestroy(&cropped_pix);
+
+    return TK_SUCCESS;
 }
 
 void tk_text_recognition_free_result(tk_ocr_result_t** result) {
-    if (!result || !*result) return;
-    
-    free_ocr_result(*result);
-    *result = nullptr;
+    if (result && *result) {
+        free_string((*result)->full_text);
+        // Simplified free, as other fields are not allocated in this version
+        free(*result);
+        *result = nullptr;
+    }
 }
 
 tk_error_code_t tk_text_recognition_set_language(

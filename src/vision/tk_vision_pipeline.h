@@ -36,6 +36,7 @@
 
 #include "utils/tk_error_handling.h"
 #include "internal_tools/tk_file_manager.h" // For tk_path_t
+#include "event_bus/event_bus_ffi.h" // For tk_event_bus_t
 
 // Forward-declare the primary pipeline and result objects as opaque types.
 typedef struct tk_vision_pipeline_s tk_vision_pipeline_t;
@@ -90,6 +91,7 @@ enum {
  * @brief Comprehensive configuration for initializing the vision pipeline.
  */
 typedef struct {
+    tk_event_bus_t*     event_bus;          /**< Handle to the central event bus. */
     tk_vision_backend_e backend;            /**< The desired inference backend. */
     int                 gpu_device_id;      /**< The ID of the GPU to use (if applicable). */
     tk_path_t*          object_detection_model_path; /**< Path to the YOLO ONNX model. */

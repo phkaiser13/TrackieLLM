@@ -144,3 +144,72 @@ impl EventBusSubscriber {
         self.receiver.recv().await
     }
 }
+
+// --- FFI for C Interoperability ---
+
+/// Creates a new EventBus and returns a pointer to it.
+/// The caller is responsible for destroying the bus using `event_bus_destroy`.
+#[no_mangle]
+pub extern "C" fn event_bus_create() -> *mut EventBus {
+    Box::into_raw(Box::new(EventBus::new()))
+}
+
+/// Destroys an EventBus instance created by `event_bus_create`.
+/// # Safety
+/// The provided pointer must be a valid pointer to an EventBus that was
+/// allocated by `event_bus_create`.
+#[no_mangle]
+pub unsafe extern "C" fn event_bus_destroy(bus: *mut EventBus) {
+    if !bus.is_null() {
+        drop(Box::from_raw(bus));
+    }
+}
+
+// FFI-safe representation of the vision result.
+// This is a simplified version of `tk_vision_result_t` from the C side.
+#[repr(C)]
+pub struct FfiVisionObject {
+    pub label: *const std::os::raw::c_char,
+    pub confidence: f32,
+    pub distance_meters: f32,
+}
+
+#[repr(C)]
+pub struct FfiVisionResult {
+    pub objects: *const FfiVisionObject,
+    pub object_count: usize,
+    pub timestamp_ns: u64,
+}
+
+/// Publishes a vision result event from C code.
+/// # Safety
+/// The provided pointers must be valid and point to data with the correct layout.
+#[no_mangle]
+pub unsafe extern "C" fn vision_publish_result(bus: *const EventBus, result: *const FfiVisionResult) {
+    if bus.is_null() || result.is_null() {
+        return;
+    }
+
+    let bus = &*bus;
+    let result = &*result;
+
+    let mut objects = Vec::new();
+    if result.object_count > 0 && !result.objects.is_null() {
+        let detected_objects = std::slice::from_raw_parts(result.objects, result.object_count);
+        for obj in detected_objects {
+            objects.push(DetectedObject {
+                label: std::ffi::CStr::from_ptr(obj.label).to_string_lossy().into_owned(),
+                confidence: obj.confidence,
+                distance: obj.distance_meters,
+            });
+        }
+    }
+
+    let vision_data = VisionData {
+        objects,
+        timestamp_ns: result.timestamp_ns,
+    };
+
+    bus.publish(TrackieEvent::VisionResult(Arc::new(vision_data)));
+    log::debug!("[Rust FFI] Published VisionResult event to the bus.");
+}
