@@ -17,26 +17,29 @@
 # It enables more intelligent feature resolution and avoids common dependency issues.
 resolver = "2"
 
-# List all the Rust crates within the project. Each subdirectory containing a
-# `lib.rs` or `main.rs` and its own `Cargo.toml` is a member of the workspace.
+# List all the Rust crates within the project. Each path should point to the
+# directory containing the crate's own `Cargo.toml` file.
 # This list must be kept in sync with the project's directory structure.
 members = [
-    "src/async_tasks/src",
-    "src/audio/src",
-    "src/cortex/rust",
-    "src/deployment/src",
-    "src/experiments/src",
-    "src/interaction/src",
-    "src/internal_tools/src",
-    "src/logging_ext/src",
-    "src/memory/src",
-    "src/monitoring/src",
-    "src/networking/src",
-    "src/profiling/src",
-    "src/security/src",
-    "src/sensors/src",
-    "src/utils/src",
-    "src/vision/src",
+    "src/ai_models",
+    "src/async_tasks",
+    "src/audio",
+    "src/cortex",
+    "src/deployment",
+    "src/experiments",
+    "src/ffi",
+    "src/interaction",
+    "src/internal_tools",
+    "src/logging_ext",
+    "src/monitoring",
+    "src/navigation",
+    "src/networking",
+    "src/profiling",
+    "src/security",
+    "src/sensors",
+    "src/utils",
+    "src/vision",
+    "src/workers",
 ]
 
 # Workspace-wide dependencies can be defined here to ensure all crates use the
