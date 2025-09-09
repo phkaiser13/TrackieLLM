@@ -16,6 +16,18 @@
 
 use std::ffi::CStr;
 use std::os::raw::c_char;
+use std::sync::Mutex;
+use once_cell::sync::Lazy;
+use crate::reasoning::ContextualReasoner;
+
+// --- Global State for the Rust-side Reasoner ---
+// This static variable holds the Rust-native ContextualReasoner, which contains
+// the WorldModel. It's wrapped in a Mutex for thread-safe access from the
+// FFI functions, which could be called from any C thread.
+static REASONER: Lazy<Mutex<ContextualReasoner>> = Lazy::new(|| {
+    Mutex::new(ContextualReasoner::default())
+});
+
 
 // Re-export the C-level types from the main ffi_bridge crate for consistency.
 // In a larger project, these might be in a dedicated `ffi-types` crate.
@@ -57,4 +69,247 @@ pub fn get_last_error_message() -> String {
             .to_string_lossy()
             .into_owned()
     }
+}
+
+// --- Manual FFI Type Definitions for tk_event_t ---
+// These are manually created to match the C headers for Task 1.3.
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub enum tk_event_type_e {
+    TK_EVENT_TYPE_NONE,
+    TK_EVENT_TYPE_VISION,
+    TK_EVENT_TYPE_AUDIO,
+    TK_EVENT_TYPE_SENSORS,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub enum tk_motion_state_e {
+    TK_MOTION_STATE_UNKNOWN,
+    TK_MOTION_STATE_STATIONARY,
+    TK_MOTION_STATE_WALKING,
+    TK_MOTION_STATE_RUNNING,
+    TK_MOTION_STATE_FALLING,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct tk_rect_t {
+    pub x: ::std::os::raw::c_int,
+    pub y: ::std::os::raw::c_int,
+    pub w: ::std::os::raw::c_int,
+    pub h: ::std::os::raw::c_int,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct tk_vision_object_t {
+    pub class_id: u32,
+    pub label: *const ::std::os::raw::c_char,
+    pub confidence: f32,
+    pub bbox: tk_rect_t,
+    pub distance_meters: f32,
+    pub width_meters: f32,
+    pub height_meters: f32,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct tk_quaternion_t {
+    pub w: f32,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct tk_world_state_t {
+    pub last_update_timestamp_ns: u64,
+    pub orientation: tk_quaternion_t,
+    pub motion_state: tk_motion_state_e,
+    pub is_speech_detected: bool,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct tk_vision_event_t {
+    pub object_count: usize,
+    pub objects: *const tk_vision_object_t,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct tk_audio_event_t {
+    pub text: *const ::std::os::raw::c_char,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct tk_sensor_event_t {
+    pub world_state: tk_world_state_t,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union tk_event_t_data {
+    pub vision_event: tk_vision_event_t,
+    pub audio_event: tk_audio_event_t,
+    pub sensor_event: tk_sensor_event_t,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct tk_event_t {
+    pub type_: tk_event_type_e,
+    pub timestamp_ns: u64,
+    pub data: tk_event_t_data,
+}
+
+/// Initializes the Rust-side `ContextualReasoner` with a pointer from C.
+///
+/// This function should be called once at startup to link the C `tk_contextual_reasoner_t`
+/// instance with the Rust-side `ContextualReasoner` that holds the `WorldModel`.
+///
+/// # Safety
+/// The `reasoner_ptr` must be a valid pointer to a `tk_contextual_reasoner_t`
+/// instance that will live for the duration of the program.
+#[no_mangle]
+pub unsafe extern "C" fn tk_cortex_rust_init_reasoner(reasoner_ptr: *mut tk_contextual_reasoner_t) {
+    if reasoner_ptr.is_null() {
+        println!("[TrackieLLM-Rust-FFI]: Warning - Initializing reasoner with null pointer.");
+    }
+    let mut reasoner = REASONER.lock().unwrap();
+    *reasoner = ContextualReasoner::new(reasoner_ptr);
+    println!("[TrackieLLM-Rust-FFI]: Rust Contextual Reasoner Initialized.");
+}
+
+/// Processes a generic event from the C side, dispatching it to the correct handler.
+///
+/// # Safety
+/// This function is intended to be called from C code.
+/// The `event` pointer must be a valid pointer to a `tk_event_t` struct.
+#[no_mangle]
+pub unsafe extern "C" fn tk_cortex_rust_process_event(event: *const tk_event_t) {
+    if event.is_null() {
+        println!("[TrackieLLM-Rust-FFI]: Received a null event pointer.");
+        return;
+    }
+
+    let safe_event = &*event;
+
+    // Lock the global reasoner to update its state.
+    let mut reasoner = REASONER.lock().unwrap();
+    if reasoner.ptr.is_null() {
+        println!("[TrackieLLM-Rust-FFI]: Cannot process event, reasoner is not initialized.");
+        return;
+    }
+
+    match safe_event.type_ {
+        tk_event_type_e::TK_EVENT_TYPE_VISION => {
+            let vision_event = &safe_event.data.vision_event;
+            println!(
+                "[TrackieLLM-Rust-FFI]: Processing Vision Event with {} objects.",
+                vision_event.object_count
+            );
+            if let Err(e) = reasoner.process_vision_event(vision_event, safe_event.timestamp_ns) {
+                println!("[TrackieLLM-Rust-FFI]: Error processing vision event: {}", e);
+            }
+        }
+        tk_event_type_e::TK_EVENT_TYPE_AUDIO => {
+            let audio_event = &safe_event.data.audio_event;
+            if audio_event.text.is_null() {
+                println!("[TrackieLLM-Rust-FFI]: Received Audio Event with null text.");
+            } else {
+                let c_str = CStr::from_ptr(audio_event.text);
+                println!(
+                    "[TrackieLLM-Rust-FFI]: Received Audio Event with text: {:?}",
+                    c_str
+                );
+            }
+        }
+        tk_event_type_e::TK_EVENT_TYPE_SENSORS => {
+            let sensor_event = &safe_event.data.sensor_event;
+            println!(
+                "[TrackieLLM-Rust-FFI]: Received Sensor Event with motion state: {:?}",
+                sensor_event.world_state.motion_state
+            );
+        }
+        tk_event_type_e::TK_EVENT_TYPE_NONE => {
+            println!("[TrackieLLM-Rust-FFI]: Received a None Event.");
+        }
+    }
+}
+
+/// Executes the simple rules engine and copies any generated alert into a C buffer.
+///
+/// # Safety
+/// `out_alert_buffer` must be a valid, writable pointer to a buffer of at least
+/// `buffer_size` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tk_cortex_reasoner_run_rules(
+    out_alert_buffer: *mut ::std::os::raw::c_char,
+    buffer_size: usize,
+) -> bool {
+    if out_alert_buffer.is_null() || buffer_size == 0 {
+        return false;
+    }
+
+    let reasoner = REASONER.lock().unwrap();
+    if reasoner.ptr.is_null() {
+        return false; // Not initialized
+    }
+
+    if let Some(alert_string) = reasoner.run_simple_rules() {
+        let c_string = match CString::new(alert_string) {
+            Ok(s) => s,
+            Err(_) => return false, // String had internal null bytes
+        };
+
+        // Use libc::strncpy for safe, bounded copying to the C buffer.
+        libc::strncpy(out_alert_buffer, c_string.as_ptr(), buffer_size - 1);
+        // Ensure null termination, as strncpy might not if the source is too long.
+        *out_alert_buffer.add(buffer_size - 1) = 0;
+
+        return true;
+    }
+
+    false // No alert was generated
+}
+
+/// Generates a contextual prompt and copies it into a C buffer.
+///
+/// # Safety
+/// `prompt_buffer` must be a valid, writable pointer to a buffer of at least
+/// `buffer_size` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn tk_cortex_generate_prompt(
+    prompt_buffer: *mut ::std::os::raw::c_char,
+    buffer_size: usize,
+) -> bool {
+    if prompt_buffer.is_null() || buffer_size == 0 {
+        return false;
+    }
+
+    let reasoner = REASONER.lock().unwrap();
+
+    // Generate the prompt from the reasoner's world model.
+    let prompt_string = reasoner.generate_environment_summary_prompt();
+
+    let c_string = match CString::new(prompt_string) {
+        Ok(s) => s,
+        Err(_) => {
+            // This can happen if the generated string has a null byte.
+            // In that case, we can't create a valid C-string.
+            return false;
+        }
+    };
+
+    // Safely copy the generated prompt to the C buffer.
+    libc::strncpy(prompt_buffer, c_string.as_ptr(), buffer_size - 1);
+    // Ensure null termination, as strncpy might not if the source is too long.
+    *prompt_buffer.add(buffer_size - 1) = 0;
+
+    true
 }

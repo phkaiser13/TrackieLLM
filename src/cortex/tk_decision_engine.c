@@ -24,6 +24,8 @@
 #include "utils/tk_logging.h"
 #include "profiling/tk_memory_profiler.h"
 #include "utils/tk_error_handling.h"
+#include "ai_models/tk_model_runner.h"
+#include "audio/tk_audio_pipeline.h"
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
@@ -65,6 +67,10 @@ struct tk_decision_engine_s {
 
 // Global atomic counter for action IDs
 static atomic_uint_fast64_t g_action_counter = ATOMIC_VAR_INIT(1);
+
+// Forward-declare the Rust FFI function for generating prompts
+extern bool tk_cortex_generate_prompt(char* prompt_buffer, size_t buffer_size);
+
 
 //-----------------------------------------------------------------------------
 // Internal Helper Functions
@@ -1804,4 +1810,77 @@ static tk_error_code_t deep_copy_action_params(tk_action_params_t* dst, const tk
     }
 
     return rc;
+}
+
+
+//-----------------------------------------------------------------------------
+// High-Level Cortex Commands Implementation
+//-----------------------------------------------------------------------------
+
+tk_error_code_t tk_decision_engine_describe_environment(
+    tk_decision_engine_t* engine,
+    void* llm_runner_ctx,
+    void* audio_pipeline_ctx
+) {
+    if (!engine || !llm_runner_ctx || !audio_pipeline_ctx) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+
+    tk_log_info("Executing 'describe environment' command...");
+
+    // 1. Get prompt from Rust
+    char prompt_buffer[1024];
+    if (!tk_cortex_generate_prompt(prompt_buffer, sizeof(prompt_buffer))) {
+        tk_log_error("Failed to generate prompt from Rust reasoner.");
+        return TK_ERROR_INTERNAL_FAILURE;
+    }
+    tk_log_debug("Generated prompt: %s", prompt_buffer);
+
+    // 2. Run LLM inference
+    tk_llm_prompt_context_t prompt_context = {
+        .user_transcription = NULL, // No user input for this action
+        .vision_context = prompt_buffer
+    };
+
+    tk_llm_result_t* llm_result = NULL;
+    tk_error_code_t result = tk_llm_runner_generate_response(
+        (tk_llm_runner_t*)llm_runner_ctx,
+        &prompt_context,
+        NULL, // No tools for this simple query
+        0,
+        &llm_result
+    );
+
+    if (result != TK_SUCCESS) {
+        tk_log_error("LLM inference failed: %d", result);
+        return result;
+    }
+
+    if (!llm_result) {
+        tk_log_error("LLM runner returned success but result is NULL.");
+        return TK_ERROR_INTERNAL_FAILURE;
+    }
+
+    // 3. Process response and synthesize speech
+    if (llm_result->type == TK_LLM_RESULT_TYPE_TEXT_RESPONSE && llm_result->data.text_response) {
+        tk_log_info("LLM response: '%s'", llm_result->data.text_response);
+
+        // Call the audio pipeline to speak the response
+        result = tk_audio_pipeline_synthesize_text(
+            (tk_audio_pipeline_t*)audio_pipeline_ctx,
+            llm_result->data.text_response
+        );
+
+        if (result != TK_SUCCESS) {
+            tk_log_error("Failed to synthesize text with audio pipeline: %d", result);
+        }
+    } else {
+        tk_log_warning("LLM did not return a text response. Type was: %d", llm_result->type);
+        result = TK_ERROR_INVALID_FORMAT;
+    }
+
+    // 4. Clean up
+    tk_llm_result_destroy(&llm_result);
+
+    return result;
 }
