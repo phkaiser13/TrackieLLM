@@ -54,16 +54,36 @@ typedef struct {
 } tk_audio_params_t;
 
 /**
+ * @enum tk_pipeline_state_e
+ * @brief Defines the operational state of the audio pipeline.
+ */
+typedef enum {
+    TK_PIPELINE_STATE_IDLE,                 /**< Pipeline is created but not actively processing. */
+    TK_PIPELINE_STATE_AWAITING_WAKE_WORD,   /**< Actively listening only for the wake word (low power). */
+    TK_PIPELINE_STATE_LISTENING_FOR_COMMAND,/**< Wake word detected, now listening for a voice command. */
+    TK_PIPELINE_STATE_TRANSCRIBING,         /**< Command audio is being transcribed by ASR. */
+    TK_PIPELINE_STATE_SYNTHESIZING,         /**< A text response is being synthesized into speech by TTS. */
+} tk_pipeline_state_e;
+
+
+/**
  * @struct tk_audio_pipeline_config_t
  * @brief Comprehensive configuration for initializing the audio pipeline.
  */
 typedef struct {
     tk_audio_params_t input_audio_params; /**< Parameters of the incoming audio stream. */
-    tk_path_t*        asr_model_path;     /**< Path to the Whisper.cpp GGML model file. */
-    tk_path_t*        vad_model_path;     /**< Path to the Silero VAD ONNX model file. */
-    tk_path_t*        tts_model_dir_path; /**< Path to the directory containing Piper TTS models. */
     const char*       user_language;      /**< Language code (e.g., "en", "pt") for ASR and TTS. */
     void*             user_data;          /**< Opaque pointer passed to all callbacks. */
+
+    // Model Paths
+    tk_path_t*        asr_model_path;     /**< Path to the Whisper.cpp GGML model file. */
+    tk_path_t*        vad_model_path;     /**< Path to the Silero VAD ONNX model file. */
+    tk_path_t*        tts_model_path;     /**< Path to the Piper TTS ONNX model file. */
+    tk_path_t*        tts_config_path;    /**< Path to the Piper TTS JSON config file. */
+    tk_path_t*        ww_model_path;      /**< Path to the Porcupine model file (.pv). */
+    tk_path_t*        ww_keyword_path;    /**< Path to the Porcupine keyword file (.ppn). */
+    float             ww_sensitivity;     /**< Sensitivity for the wake word (0.0 to 1.0). */
+
 
     // VAD specific parameters
     float             vad_silence_threshold_ms; /**< How long silence must be before speech is considered ended. */
@@ -229,6 +249,39 @@ TK_NODISCARD tk_error_code_t tk_audio_pipeline_synthesize_text(
  * This function is thread-safe.
  */
 TK_NODISCARD tk_error_code_t tk_audio_pipeline_force_transcription_end(tk_audio_pipeline_t* pipeline);
+
+
+//------------------------------------------------------------------------------
+// Standalone Utility Functions
+//------------------------------------------------------------------------------
+
+/**
+ * @brief A simple, blocking function to synthesize and play text directly.
+ *
+ * This is a utility function for cases where a simple, one-off speech
+ * output is needed without the complexity of the full asynchronous pipeline.
+ * It initializes a temporary TTS engine, synthesizes the text to a buffer,
+ * plays the audio on the default output device, and then cleans up.
+ *
+ * NOTE: This function can be slow to execute due to model loading and is
+ * not suitable for real-time, low-latency responses. Use the main pipeline
+ * for that purpose.
+ *
+ * @param[in] text The UTF-8 encoded text to be spoken.
+ * @param[in] model_path Path to the Piper ONNX model file.
+ * @param[in] config_path Path to the Piper JSON config file.
+ *
+ * @return TK_SUCCESS on success.
+ * @return TK_ERROR_INVALID_ARGUMENT if text or paths are NULL.
+ * @return TK_ERROR_MODEL_LOAD_FAILED if the TTS model cannot be loaded.
+ * @return TK_ERROR_EXTERNAL_LIBRARY_FAILED if audio playback fails.
+ */
+TK_NODISCARD tk_error_code_t tk_audio_pipeline_say(
+    const char* text,
+    const char* model_path,
+    const char* config_path
+);
+
 
 #ifdef __cplusplus
 }

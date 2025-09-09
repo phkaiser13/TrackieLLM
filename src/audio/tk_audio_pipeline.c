@@ -37,6 +37,7 @@
 #include "tk_vad_silero.h"
 #include "tk_asr_whisper.h"
 #include "tk_tts_piper.h"
+#include "audio/tk_wake_word_porcupine.h" // Added for Wake Word
 #include "utils/tk_logging.h"
 #include "utils/tk_error_handling.h"
 
@@ -66,12 +67,16 @@ struct tk_audio_pipeline_s {
     tk_audio_pipeline_config_t config;
     tk_audio_callbacks_t       callbacks;
 
+    // Pipeline State
+    atomic_int                 current_state; // Using atomic for thread-safe state checks
+
     // Audio parameters
     uint32_t                   sample_rate;
-    uint32_t                   frame_size; // Number of samples per processing frame
-    uint32_t                   overlap_size; // Overlap in samples for VAD
+    uint32_t                   frame_size; // Number of samples per processing frame for VAD
+    uint32_t                   porcupine_frame_length; // Number of samples for Porcupine
 
     // Models and engines
+    tk_porcupine_context_t*    porcupine_context; // Wake Word engine
     tk_vad_silero_context_t*   vad_context;
     tk_asr_whisper_context_t*  whisper_context;
     tk_tts_piper_context_t*    piper_context;
@@ -81,6 +86,10 @@ struct tk_audio_pipeline_s {
     size_t                     input_buffer_head;
     size_t                     input_buffer_tail;
     atomic_bool                input_buffer_full;
+
+    // Wake Word state
+    int16_t*                   porcupine_buffer; // Buffer sized for one Porcupine frame
+    size_t                     porcupine_buffer_size;
 
     // ASR state
     char                       current_transcription[TK_AUDIO_PIPELINE_MAX_TRANSCRIPTION_LENGTH];
@@ -172,18 +181,37 @@ TK_NODISCARD tk_error_code_t tk_audio_pipeline_create(
     pipeline->current_tts_item = NULL;
 
     // Initialize models
+    // Load Porcupine Wake Word model
+    tk_porcupine_config_t ww_config = {0};
+    ww_config.access_key_path = NULL; // Assuming access key is hardcoded in wrapper
+    ww_config.model_path = config->ww_model_path;
+    ww_config.num_keywords = 1;
+    ww_config.keyword_paths = &config->ww_keyword_path;
+    ww_config.sensitivities = &config->ww_sensitivity;
+
+    tk_error_code_t result = tk_porcupine_create(&pipeline->porcupine_context, &ww_config);
+    if (result != TK_SUCCESS) {
+        TK_LOG_ERROR("Failed to initialize Porcupine Wake Word engine: %d", result);
+        free(pipeline->asr_audio_buffer);
+        free(pipeline);
+        return result;
+    }
+    pipeline->porcupine_frame_length = tk_porcupine_get_frame_length(pipeline->porcupine_context);
+    pipeline->porcupine_buffer = malloc(pipeline->porcupine_frame_length * sizeof(int16_t));
+
+
     // Load Silero VAD model
     tk_vad_silero_config_t vad_config = {0};
     vad_config.model_path = config->vad_model_path;
     vad_config.sample_rate = pipeline->sample_rate;
     vad_config.threshold = config->vad_speech_probability_threshold;
     vad_config.min_silence_duration_ms = config->vad_silence_threshold_ms;
-    vad_config.min_speech_duration_ms = 250.0f; // Default value
-    vad_config.speech_pad_ms = 30.0f; // Default value
     
-    tk_error_code_t result = tk_vad_silero_create(&pipeline->vad_context, &vad_config);
+    result = tk_vad_silero_create(&pipeline->vad_context, &vad_config);
     if (result != TK_SUCCESS) {
         TK_LOG_ERROR("Failed to initialize Silero VAD: %d", result);
+        tk_porcupine_destroy(&pipeline->porcupine_context);
+        free(pipeline->porcupine_buffer);
         free(pipeline->asr_audio_buffer);
         free(pipeline);
         return result;
@@ -234,6 +262,8 @@ TK_NODISCARD tk_error_code_t tk_audio_pipeline_create(
     }
 
     // Initialize buffers and state
+    atomic_store(&pipeline->current_state, TK_PIPELINE_STATE_AWAITING_WAKE_WORD);
+    pipeline->porcupine_buffer_size = 0;
     pipeline->input_buffer_head = 0;
     pipeline->input_buffer_tail = 0;
     atomic_store(&pipeline->input_buffer_full, false);
@@ -299,8 +329,12 @@ void tk_audio_pipeline_destroy(tk_audio_pipeline_t** pipeline) {
     tk_tts_piper_destroy(&p->piper_context);
     tk_asr_whisper_destroy(&p->whisper_context);
     tk_vad_silero_destroy(&p->vad_context);
+    tk_porcupine_destroy(&p->porcupine_context);
 
-    // Clean up ASR audio buffer
+    // Clean up buffers
+    if (p->porcupine_buffer) {
+        free(p->porcupine_buffer);
+    }
     if (p->asr_audio_buffer) {
         free(p->asr_audio_buffer);
     }
@@ -411,16 +445,65 @@ TK_NODISCARD tk_error_code_t tk_audio_pipeline_force_transcription_end(
 // Internal Helper Functions
 //------------------------------------------------------------------------------
 
+static void process_audio_for_wakeword(tk_audio_pipeline_t* pipeline) {
+    size_t available_frames = (pipeline->input_buffer_head - pipeline->input_buffer_tail + TK_AUDIO_PIPELINE_INTERNAL_BUFFER_SIZE) % TK_AUDIO_PIPELINE_INTERNAL_BUFFER_SIZE;
+
+    while (available_frames > 0) {
+        size_t frames_to_copy = pipeline->porcupine_frame_length - pipeline->porcupine_buffer_size;
+        if (frames_to_copy > available_frames) {
+            frames_to_copy = available_frames;
+        }
+
+        // Copy frames to porcupine buffer
+        for (size_t i = 0; i < frames_to_copy; i++) {
+            pipeline->porcupine_buffer[pipeline->porcupine_buffer_size + i] = pipeline->input_buffer[pipeline->input_buffer_tail];
+            pipeline->input_buffer_tail = (pipeline->input_buffer_tail + 1) % TK_AUDIO_PIPELINE_INTERNAL_BUFFER_SIZE;
+        }
+        pipeline->porcupine_buffer_size += frames_to_copy;
+        available_frames -= frames_to_copy;
+
+        // If porcupine buffer is full, process it
+        if (pipeline->porcupine_buffer_size == pipeline->porcupine_frame_length) {
+            int keyword_index = -1;
+            tk_error_code_t result = tk_porcupine_process(pipeline->porcupine_context, pipeline->porcupine_buffer, &keyword_index);
+            pipeline->porcupine_buffer_size = 0; // Reset buffer
+
+            if (result == TK_SUCCESS && keyword_index != -1) {
+                TK_LOG_INFO("Wake word detected! Keyword index: %d", keyword_index);
+                atomic_store(&pipeline->current_state, TK_PIPELINE_STATE_LISTENING_FOR_COMMAND);
+                // Optional: trigger a callback here
+                break; // Exit loop and switch to VAD processing
+            }
+        }
+    }
+}
+
+static void process_audio_for_vad(tk_audio_pipeline_t* pipeline) {
+    size_t frames_to_process = (pipeline->input_buffer_head - pipeline->input_buffer_tail + TK_AUDIO_PIPELINE_INTERNAL_BUFFER_SIZE) % TK_AUDIO_PIPELINE_INTERNAL_BUFFER_SIZE;
+
+    if (frames_to_process > 0) {
+        size_t chunk_size = (frames_to_process > pipeline->frame_size) ? pipeline->frame_size : frames_to_process;
+        int16_t audio_chunk[chunk_size];
+
+        for (size_t i = 0; i < chunk_size; i++) {
+            audio_chunk[i] = pipeline->input_buffer[pipeline->input_buffer_tail];
+            pipeline->input_buffer_tail = (pipeline->input_buffer_tail + 1) % TK_AUDIO_PIPELINE_INTERNAL_BUFFER_SIZE;
+        }
+
+        mtx_unlock(&pipeline->worker_mutex);
+        process_vad(pipeline, audio_chunk, chunk_size);
+        if (mtx_lock(&pipeline->worker_mutex) != thrd_success) {
+            atomic_store(&pipeline->worker_thread_running, false); // Stop thread on mutex error
+        }
+    }
+}
+
 static int worker_thread_func(void* arg) {
     tk_audio_pipeline_t* pipeline = (tk_audio_pipeline_t*)arg;
     
     while (atomic_load(&pipeline->worker_thread_running)) {
-        // Lock mutex
-        if (mtx_lock(&pipeline->worker_mutex) != thrd_success) {
-            continue;
-        }
+        if (mtx_lock(&pipeline->worker_mutex) != thrd_success) { continue; }
 
-        // Wait for data or stop signal
         while (pipeline->input_buffer_head == pipeline->input_buffer_tail && 
                pipeline->tts_queue_size == 0 && 
                atomic_load(&pipeline->worker_thread_running)) {
@@ -432,35 +515,27 @@ static int worker_thread_func(void* arg) {
             break;
         }
 
-        // Process available audio data
-        size_t frames_to_process = (pipeline->input_buffer_head - pipeline->input_buffer_tail + TK_AUDIO_PIPELINE_INTERNAL_BUFFER_SIZE) % TK_AUDIO_PIPELINE_INTERNAL_BUFFER_SIZE;
-        
-        if (frames_to_process > 0) {
-            // Process audio in chunks of frame_size
-            size_t chunk_size = (frames_to_process > pipeline->frame_size) ? pipeline->frame_size : frames_to_process;
-            int16_t audio_chunk[chunk_size];
-            
-            // Copy chunk from circular buffer
-            for (size_t i = 0; i < chunk_size; i++) {
-                audio_chunk[i] = pipeline->input_buffer[pipeline->input_buffer_tail];
-                pipeline->input_buffer_tail = (pipeline->input_buffer_tail + 1) % TK_AUDIO_PIPELINE_INTERNAL_BUFFER_SIZE;
-            }
-            
-            // Unlock mutex during processing to avoid blocking audio input
-            mtx_unlock(&pipeline->worker_mutex);
-            
-            // Process VAD
-            process_vad(pipeline, audio_chunk, chunk_size);
-            
-            // Re-lock mutex for next iteration
-            if (mtx_lock(&pipeline->worker_mutex) != thrd_success) {
+        // Main State Machine Logic
+        tk_pipeline_state_e state = atomic_load(&pipeline->current_state);
+        switch (state) {
+            case TK_PIPELINE_STATE_AWAITING_WAKE_WORD:
+                process_audio_for_wakeword(pipeline);
                 break;
-            }
+            
+            case TK_PIPELINE_STATE_LISTENING_FOR_COMMAND:
+                process_audio_for_vad(pipeline);
+                // TODO: Add timeout to transition back to AWAITING_WAKE_WORD
+                break;
+
+            default:
+                // Other states (TRANSCRIBING, etc.) are handled implicitly
+                // by the VAD->ASR->TTS flow. We just need to make sure
+                // we don't consume audio when not listening.
+                break;
         }
 
         // Process TTS queue if there are items
         if (pipeline->tts_queue_size > 0) {
-            // Process next TTS request
             process_next_tts_request(pipeline);
         }
 
@@ -566,6 +641,11 @@ static tk_error_code_t process_asr(
             pipeline->transcription_length = strlen(pipeline->current_transcription);
         }
         
+        // Log the final transcription for debugging/testing purposes
+        if (is_final) {
+            TK_LOG_INFO("Final transcription: \"%s\"", pipeline->current_transcription);
+        }
+
         // Notify callback
         if (pipeline->callbacks.on_transcription) {
             tk_transcription_t transcription = {0};
@@ -633,14 +713,20 @@ static void vad_event_callback(tk_vad_silero_event_e event, void* user_data) {
     // Handle speech start/end events
     switch (event) {
         case TK_VAD_EVENT_SPEECH_STARTED:
-            // Reset ASR state when speech starts
+            TK_LOG_DEBUG("VAD: Speech started.");
             reset_asr_state(pipeline);
             break;
             
         case TK_VAD_EVENT_SPEECH_ENDED:
-            // Process accumulated audio as final transcription
+            TK_LOG_DEBUG("VAD: Speech ended.");
             if (pipeline->asr_audio_buffer_size > 0) {
+                TK_LOG_INFO("Transitioning to state: TRANSCRIBING");
+                atomic_store(&pipeline->current_state, TK_PIPELINE_STATE_TRANSCRIBING);
                 process_asr(pipeline, NULL, 0, true);
+
+                // After transcription, go back to waiting for wake word
+                TK_LOG_INFO("Transitioning to state: AWAITING_WAKE_WORD");
+                atomic_store(&pipeline->current_state, TK_PIPELINE_STATE_AWAITING_WAKE_WORD);
             }
             break;
     }
@@ -840,4 +926,145 @@ static tk_error_code_t process_next_tts_request(tk_audio_pipeline_t* pipeline) {
     pipeline->current_tts_item = NULL;
     
     return result;
+}
+
+// --- MINIAUDIO IMPLEMENTATION ---
+// Define the implementation of the miniaudio library in this source file.
+#define MINIAUDIO_IMPLEMENTATION
+#include "miniaudio.h"
+// --------------------------------
+
+// --- Standalone Utility Function Implementation ---
+
+static void audio_playback_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount)
+{
+    int16_t* buffer = (int16_t*)pDevice->pUserData;
+    ma_uint32 frames_to_write = frameCount;
+    ma_uint32* p_frames_played = (ma_uint32*)((char*)buffer - sizeof(ma_uint32)); // User data trick
+
+    if (*p_frames_played + frames_to_write > pDevice->playback.internalPeriodSizeInFrames) {
+        frames_to_write = pDevice->playback.internalPeriodSizeInFrames - *p_frames_played;
+    }
+
+    memcpy(pOutput, buffer + *p_frames_played, frames_to_write * sizeof(int16_t));
+    *p_frames_played += frames_to_write;
+
+    (void)pInput;
+}
+
+
+TK_NODISCARD tk_error_code_t tk_audio_pipeline_say(
+    const char* text,
+    const char* model_path_str,
+    const char* config_path_str
+) {
+    if (!text || !model_path_str || !config_path_str) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+
+    tk_error_code_t final_result = TK_SUCCESS;
+
+    // 1. Create Piper TTS context
+    tk_tts_piper_context_t* tts_context = NULL;
+    tk_path_t* model_path = tk_path_create(model_path_str);
+    tk_path_t* config_path = tk_path_create(config_path_str);
+
+    if (!model_path || !config_path) {
+        if (model_path) tk_path_destroy(model_path);
+        if (config_path) tk_path_destroy(config_path);
+        return TK_ERROR_OUT_OF_MEMORY;
+    }
+
+    tk_tts_piper_config_t tts_config = {
+        .model_path = model_path,
+        .config_path = config_path,
+        .n_threads = 2,
+    };
+
+    tk_error_code_t result = tk_tts_piper_create(&tts_context, &tts_config);
+    tk_path_destroy(model_path);
+    tk_path_destroy(config_path);
+
+    if (result != TK_SUCCESS) {
+        TK_LOG_ERROR("Failed to create temporary TTS context: %d", result);
+        return result;
+    }
+
+    // 2. Synthesize audio to buffer
+    int16_t* audio_buffer = NULL;
+    size_t frame_count = 0;
+    result = tk_tts_piper_synthesize_to_buffer(tts_context, text, &audio_buffer, &frame_count);
+
+    if (result != TK_SUCCESS) {
+        TK_LOG_ERROR("Failed to synthesize text for say(): %d", result);
+        final_result = result;
+        goto cleanup_tts;
+    }
+
+    if (audio_buffer == NULL || frame_count == 0) {
+        TK_LOG_WARN("TTS synthesis produced no audio data.");
+        final_result = TK_SUCCESS; // Not an error, just nothing to play
+        goto cleanup_tts;
+    }
+
+    // 3. Play audio using miniaudio
+    ma_device_config device_config;
+    ma_device device;
+    ma_uint32 frames_played = 0;
+
+    // We use a small trick to pass both the buffer and a counter to the callback
+    void* user_data_with_counter = malloc(frame_count * sizeof(int16_t) + sizeof(ma_uint32));
+    if (!user_data_with_counter) {
+        final_result = TK_ERROR_OUT_OF_MEMORY;
+        goto cleanup_buffer;
+    }
+    *(ma_uint32*)user_data_with_counter = 0;
+    memcpy((char*)user_data_with_counter + sizeof(ma_uint32), audio_buffer, frame_count * sizeof(int16_t));
+
+    device_config = ma_device_config_init(ma_device_type_playback);
+    device_config.playback.format   = ma_format_s16;
+    device_config.playback.channels = 1;
+    device_config.sampleRate        = 22050; // Piper default
+    device_config.dataCallback      = audio_playback_callback;
+    device_config.pUserData         = (char*)user_data_with_counter + sizeof(ma_uint32);
+
+    if (ma_device_init(NULL, &device_config, &device) != MA_SUCCESS) {
+        TK_LOG_ERROR("Failed to initialize miniaudio playback device.");
+        final_result = TK_ERROR_EXTERNAL_LIBRARY_FAILED;
+        free(user_data_with_counter);
+        goto cleanup_buffer;
+    }
+
+    if (ma_device_start(&device) != MA_SUCCESS) {
+        TK_LOG_ERROR("Failed to start miniaudio playback device.");
+        ma_device_uninit(&device);
+        free(user_data_with_counter);
+        final_result = TK_ERROR_EXTERNAL_LIBRARY_FAILED;
+        goto cleanup_buffer;
+    }
+
+    TK_LOG_INFO("Playing audio... Press Enter to stop.");
+    // In a real app, we would wait for the callback to finish.
+    // For this test, we can just sleep or wait for user input.
+    // Here we'll just let it play out. In a test executable, you'd wait.
+    // This is a blocking call in a simple implementation.
+    // A better way is to check `ma_device_get_state`.
+    // For now, we'll just sleep for the duration of the audio.
+    float duration_sec = (float)frame_count / 22050.0f;
+    struct timespec sleep_time = { (time_t)duration_sec, (long)((duration_sec - (time_t)duration_sec) * 1e9) };
+    nanosleep(&sleep_time, NULL);
+
+
+    ma_device_uninit(&device);
+    free(user_data_with_counter);
+
+cleanup_buffer:
+    // 4. Free the audio buffer
+    free(audio_buffer);
+
+cleanup_tts:
+    // 5. Destroy the TTS context
+    tk_tts_piper_destroy(&tts_context);
+
+    return final_result;
 }
