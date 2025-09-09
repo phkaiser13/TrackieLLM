@@ -1,0 +1,35 @@
+# Copyright (C) 2025 Pedro Henrique / phdev13
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+[package]
+name = "trackiellm_event_bus"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["Pedro Henrique / phdev13"]
+description = "Provides a system-wide, many-to-many, asynchronous communication channel for TrackieLLM."
+repository = "https://github.com/phkaiser13/trackiellm"
+readme = "README.md" 
+[dependencies]
+# Tokio provides the core for our asynchronous, thread-safe broadcast channel,
+# which is the foundation of the event bus. The "sync" feature is required for broadcast channels.
+tokio = { version = "1.36.0", features = ["sync"] }
+
+# Internal crate dependency that defines shared data structures for sensor fusion results,
+# like `WorldState`. The path assumes that 'sensors' is a sibling directory to 'event_bus'.
+trackiellm_sensors = { path = "../sensors" }
+
+# Internal crate dependency that defines shared data structures for navigation analysis,
+# like `SpaceSector` and `TrackedObstacle`. The path assumes 'navigation' is a sibling directory.
+trackiellm_navigation = { path = "../navigation" }

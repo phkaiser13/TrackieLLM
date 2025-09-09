@@ -1,0 +1,42 @@
+# Copyright (C) 2025 Pedro Henrique / phdev13
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+[package]
+name = "trackiellm_workers"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["Pedro Henrique / phdev13"]
+description = "Manages the long-running, asynchronous background tasks (workers) for TrackieLLM."
+repository = "https://github.com/phkaiser13/trackiellm"
+readme = "README.md"
+
+[dependencies]
+# Tokio is the runtime for writing asynchronous applications with Rust.
+# It is essential for managing the concurrent workers.
+# - "sync" is needed for channels (mpsc, watch) used for communication.
+# - "time" is needed for functions like sleep() and Instant.
+tokio = { version = "1.36.0", features = ["sync", "time"] }
+
+# Internal crate that provides the central event bus for inter-worker communication.
+trackiellm_event_bus = { path = "../event_bus" }
+
+# Internal crate defining the FFI bridge to the C-based audio processing library.
+trackiellm_audio = { path = "../audio" }
+
+# Internal crate defining the FFI bridge to the C-based vision processing library.
+trackiellm_vision = { path = "../vision" }
+
+# Internal crate that provides the memory and reasoning components for the cortex worker.
+trackiellm_cortex = { path = "../cortex" }

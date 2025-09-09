@@ -1,0 +1,29 @@
+[package]
+# The name of the package.
+name = "sensors"
+
+# The version of the package.
+version = "0.1.0"
+
+# The Rust edition to use.
+edition = "2021"
+
+# The license for the package.
+license = "Apache-2.0"
+
+# A brief description of the package.
+description = "A library for sensor data processing, filtering, and fusion, with a C-compatible FFI layer."
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# This configures the library crate compilation.
+# "lib" is the standard Rust library format.
+# "staticlib" compiles the code into a static library (.a) that can be linked into other applications.
+crate-type = ["lib", "staticlib"]
+
+[dependencies]
+# This section would list external Rust libraries (crates) from crates.io.
+# Based on the analysis of the src files (lib.rs, ffi_bridge.rs, sensor_filters.rs, sensor_fusion.rs),
+# this module does not appear to have any external dependencies. It only uses standard library features
+# and modules defined within its own crate.

@@ -1,0 +1,35 @@
+# Cargo.toml for the async_tasks crate
+
+[package]
+name = "async_tasks"
+version = "0.1.0"
+edition = "2021"
+authors = ["Pedro Henrique / phdev13"]
+description = "A crate for managing asynchronous operations and background jobs for TrackieLLM."
+license = "Apache-2.0"
+readme = "README.md" # Optional: consider creating a README for this crate
+repository = "https://github.com/phkaiser13/trackiellm" # Optional: Adjust if this crate has a different repo
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# The core asynchronous runtime for task spawning, I/O, and timers.
+# The "full" feature is enabled to include all tokio capabilities,
+# which simplifies configuration for multi-threaded runtimes, macros, etc.
+tokio = { version = "1", features = ["full"] }
+
+# Provides essential traits and utilities for working with asynchronous Futures.
+futures = "0.3"
+
+# A logging facade for emitting structured log messages.
+log = "0.4"
+
+# A library for ergonomic error handling, used to create the custom error types.
+thiserror = "1.0"
+
+# A utility to get the number of physical CPU cores, used to configure the thread pool.
+num_cpus = "1.16"
+
+[lib]
+name = "async_tasks"
+path = "src/lib.rs"

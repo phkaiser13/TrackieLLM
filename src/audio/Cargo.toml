@@ -1,0 +1,49 @@
+# Copyright (C) 2025 Pedro Henrique / phdev13
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+[package]
+name = "trackie-audio"
+version = "0.1.0"
+authors = ["Pedro Henrique / phdev13"]
+edition = "2021"
+license = "Apache-2.0"
+description = "Handles the audio processing pipeline for TrackieLLM, including ASR (Whisper) and TTS (Piper)."
+repository = "https://github.com/phkaiser13/trackiellm" # Placeholder, adjust if needed
+readme = "README.md" 
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "audio"
+path = "src/lib.rs"
+
+[dependencies]
+# For ergonomic error handling, used throughout the crate.
+thiserror = "1.0"
+
+# For structured logging of audio events.
+log = "0.4"
+
+# Needed for interacting with C-allocated memory, specifically for freeing
+# buffers returned from the FFI layer (e.g., in tts_synthesis.rs).
+libc = "0.2"
+
+# Placeholder for the internal_tools crate, assuming it is part of the workspace.
+# The doc comment in `lib.rs` mentions this dependency.
+# internal_tools = { path = "../internal_tools" }
+
+
+[dev-dependencies]
+# Dependencies required only for running tests.
+# Add any testing-specific crates here.

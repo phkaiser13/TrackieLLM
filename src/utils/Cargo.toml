@@ -1,0 +1,43 @@
+# phkaiser13/trackiellm/TrackieLLM-main/src/utils/Cargo.toml
+
+[package]
+# --- Package Metadata ---
+# The name of the crate. This is used by cargo and crates.io.
+name = "trackie-utils"
+
+# The version of the crate. Follows semantic versioning.
+version = "0.1.0"
+
+# The Rust edition to use for compiling this crate.
+edition = "2021"
+
+# The authors of the crate.
+authors = ["Pedro Henrique / phdev13"]
+
+# The license for the crate, as requested.
+license = "Apache-2.0"
+
+# A short description of the crate's purpose.
+description = "Provides safe Rust wrappers for core C-based utilities for error handling and logging in the TrackieLLM project."
+
+
+repository = "https://github.com/phkaiser13/trackiellm"
+
+
+[dependencies]
+# --- Crate Dependencies ---
+# This section lists all the external crates from crates.io that this package depends on.
+
+# 'thiserror' is used for ergonomic, derive-based error handling.
+# It's used in `error_utils.rs` and `lib.rs` to define the `TrackieError` and `UtilsError` enums.
+thiserror = "2.0.16"
+
+[lib]
+# --- Library Target Configuration ---
+# Specifies that this package is a library.
+
+# The name of the library. When other crates link against this one, they will use this name.
+name = "trackie_utils"
+
+# The path to the main library file.
+path = "src/lib.rs"

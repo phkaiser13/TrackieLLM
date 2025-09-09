@@ -1,0 +1,30 @@
+# Copyright (C) 2025 Pedro Henrique / phdev13
+#
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "vision"
+version = "0.1.0"
+edition = "2021"
+authors = ["Pedro Henrique / phdev13"]
+license = "Apache-2.0"
+description = "Core computer vision capabilities for the TrackieLLM application, providing a safe Rust abstraction over the C/C++ vision pipeline."
+repository = "https://github.com/phkaiser13/trackiellm"
+readme = "README.md" 
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "vision"
+path = "src/lib.rs"
+
+[dependencies]
+# For structured logging used throughout the crate.
+log = "0.4"
+
+# For ergonomic and descriptive error handling.
+thiserror = "2.0.16"
+
+# Workspace dependency for shared utilities like safe path handling.
+# This path assumes that the 'internal_tools' crate is located at `src/internal_tools`.
+internal_tools = { path = "../internal_tools" }

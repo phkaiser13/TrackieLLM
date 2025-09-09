@@ -1,0 +1,46 @@
+# Cargo.toml for the ai_models crate
+# This file defines the metadata and dependencies for the AI model runner module.
+
+[package]
+name = "ai_models"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["TrackieLLM Contributors"]
+description = "A library for running various AI models, providing a unified interface for formats like GGUF and ONNX."
+repository = "https://github.com/phkaiser13/trackiellm"
+readme = "README.md" # You might want to create a README.md for this crate
+keywords = ["ai", "ml", "inference", "onnx", "gguf"]
+categories = ["science", "computer-vision", "multimedia::audio"]
+
+# The lib section specifies that this package is a library.
+[lib]
+name = "ai_models"
+path = "src/lib.rs"
+
+# Dependencies required for this crate.
+[dependencies]
+# For easy and robust error handling.
+anyhow = "1.0"
+
+# Unified logging facade.
+log = "0.4"
+
+# Serde is a framework for serializing and deserializing Rust data structures efficiently.
+# The "derive" feature enables procedural macros for automatic implementation of Serialize and Deserialize.
+serde = { version = "1.0", features = ["derive"] }
+
+# For robust error handling, often used with anyhow.
+thiserror = "1.0"
+
+# Candid is a data description language for communicating with services running on specific platforms.
+# Used here for data serialization/deserialization.
+candid = "0.10.1"
+
+# Library to generate OpenAPI documentation from Rust code.
+# The "serde_yaml" feature is included for YAML support with Serde.
+utoipa = { version = "4.2.0", features = ["serde_yaml"] }
+
+# ONNX (Open Neural Network Exchange) inference runtime.
+# This is the core dependency for running ONNX models.
+tract-onnx = "0.21.0"

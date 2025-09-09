@@ -1,0 +1,52 @@
+[package]
+name = "trackiellm-security"
+version = "0.1.0"
+edition = "2021"
+authors = ["Pedro Henrique / phdev13 <phdev13@example.com>"]
+description = "Security crate for TrackieLLM, providing a safe Rust API over C components for encryption and authentication."
+license = "Apache-2.0"
+repository = "https://github.com/phkaiser13/trackiellm" # Example repository URL
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# This configuration builds both a standard Rust library (for other crates)
+# and a C-compatible dynamic library (for FFI).
+name = "trackiellm_security"
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+# Dependency for creating detailed, ergonomic error types.
+# Used in lib.rs for the SecurityError enum.
+thiserror = "2.0.16"
+
+# A lightweight logging facade for Rust.
+# Mentioned as a dependency in the lib.rs documentation header.
+log = "0.4"
+
+# Provides raw FFI bindings to C libraries (e.g., for types like c_void).
+# Essential for interoperability with the C components.
+libc = "0.2"
+
+# A crate for securely wiping sensitive data from memory.
+# Mentioned as a dependency in lib.rs to prevent secrets from being leaked.
+zeroize = "1.7"
+
+
+[dev-dependencies]
+# Dependencies used only for running tests and benchmarks.
+# tempfile helps in creating temporary files and directories for isolated tests.
+tempfile = "3.10"
+
+[build-dependencies]
+# This section is for dependencies needed by the build script (build.rs).
+# The 'cc' crate is commonly used to compile C/C++/Objective-C code from a build script.
+# It is included here as a good practice for projects with a C FFI layer.
+cc = { version = "1.0", optional = true }
+
+[profile.release]
+# Optimization settings for release builds.
+opt-level = 3      # Enable full optimizations.
+lto = true         # Enable Link-Time Optimization for better performance.
+codegen-units = 1  # Compile all code into a single unit for maximum optimization.
+panic = "abort"    # Abort on panic for smaller and faster binaries.

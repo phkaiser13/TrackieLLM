@@ -1,0 +1,25 @@
+# Cargo.toml for the internal_tools crate
+
+[package]
+name = "internal_tools"
+version = "0.1.0"
+authors = ["Pedro Henrique / phdev13"]
+edition = "2021"
+license = "Apache-2.0"
+description = "Safe Rust wrappers for internal C-based utilities like configuration parsing and filesystem management."
+repository = "https://github.com/phkaiser13/trackiellm" # Optional: Add a repository link
+readme = "README.md" # Optional: Assumes you might add a README later
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# For structured logging, mentioned in the source file comments.
+log = "0.4"
+
+# For ergonomic error handling, used extensively in the error types.
+thiserror = "2.0.16"
+
+[lib]
+# Defines this crate as a library.
+name = "internal_tools"
+path = "src/lib.rs"
