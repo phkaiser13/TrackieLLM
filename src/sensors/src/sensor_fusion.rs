@@ -35,66 +35,123 @@ pub enum FusionError {
     NotInitialized,
 
     /// An FFI call to the sensor fusion C library failed.
-    #[error("Sensor fusion FFI call failed: {0}")]
-    Ffi(String),
+    #[error("Sensor fusion FFI call failed with code: {0}")]
+    Ffi(i32),
+}
+
+/// Configuration for the `SensorFusionService`.
+pub struct SensorFusionConfig {
+    /// The target frequency in Hz for sensor processing.
+    pub update_rate_hz: f32,
+    /// A tuning parameter for the orientation filter.
+    pub gyro_trust_factor: f32,
 }
 
 /// A safe, high-level interface to the Sensor Fusion Engine.
 pub struct SensorFusionService {
     /// The handle to the underlying `tk_sensor_fusion_t` C object.
-    #[allow(dead_code)]
     engine_handle: *mut ffi::tk_sensor_fusion_t,
 }
 
 impl SensorFusionService {
     /// Creates a new `SensorFusionService`.
-    ///
-    /// This is a simplified constructor. A real implementation would take a
-    /// configuration struct and call `tk_sensor_fusion_create`.
-    pub fn new() -> Result<Self, SensorsError> {
-        // Placeholder for creating the fusion engine.
-        Ok(Self {
-            engine_handle: null_mut(),
-        })
+    pub fn new(config: SensorFusionConfig) -> Result<Self, SensorsError> {
+        let mut engine_handle = null_mut();
+        let c_config = ffi::tk_sensor_fusion_config_t {
+            update_rate_hz: config.update_rate_hz,
+            gyro_trust_factor: config.gyro_trust_factor,
+        };
+
+        let result = unsafe { ffi::tk_sensor_fusion_create(&mut engine_handle, &c_config) };
+
+        if result != ffi::TK_SUCCESS {
+            return Err(SensorsError::Ffi(format!(
+                "Failed to create sensor fusion engine: {}",
+                result
+            )));
+        }
+        if engine_handle.is_null() {
+            return Err(SensorsError::NotInitialized);
+        }
+
+        Ok(Self { engine_handle })
     }
 
     /// Injects a new IMU data sample into the engine.
-    #[allow(dead_code, unused_variables)]
     pub fn inject_imu_data(&mut self, data: &ImuData) -> Result<(), SensorsError> {
-        // Mock Implementation:
-        // 1. Convert the Rust `ImuData` struct into a C `tk_imu_data_t`.
-        // 2. Make the unsafe FFI call to `tk_sensor_fusion_inject_imu_data`.
-        // 3. Check the return code.
-        log::trace!("Injecting IMU data into fusion engine.");
+        let c_imu_data = ffi::tk_imu_data_t {
+            timestamp_ns: 0, // Placeholder, timestamp is not used in the C code yet
+            acc_x: data.accelerometer.x,
+            acc_y: data.accelerometer.y,
+            acc_z: data.accelerometer.z,
+            gyro_x: data.gyroscope.x,
+            gyro_y: data.gyroscope.y,
+            gyro_z: data.gyroscope.z,
+            has_mag_data: data.magnetometer.is_some(),
+            mag_x: data.magnetometer.map_or(0.0, |m| m.x),
+            mag_y: data.magnetometer.map_or(0.0, |m| m.y),
+            mag_z: data.magnetometer.map_or(0.0, |m| m.z),
+        };
+
+        let result = unsafe { ffi::tk_sensor_fusion_inject_imu_data(self.engine_handle, &c_imu_data) };
+        if result != ffi::TK_SUCCESS {
+            return Err(SensorsError::Ffi(format!(
+                "Failed to inject IMU data: {}",
+                result
+            )));
+        }
         Ok(())
     }
 
+    /// Injects the VAD (Voice Activity Detection) state.
+    pub fn inject_vad_state(&mut self, is_speech_active: bool) {
+        unsafe { ffi::tk_sensor_fusion_inject_vad_state(self.engine_handle, is_speech_active) };
+    }
+
     /// Processes all injected data and updates the internal world state.
-    #[allow(dead_code, unused_variables)]
     pub fn update(&mut self, delta_time_s: f32) -> Result<(), SensorsError> {
-        // Mock Implementation:
-        // 1. Call `tk_sensor_fusion_update`.
-        // 2. Check the return code.
-        log::trace!("Updating sensor fusion state with dt: {}", delta_time_s);
+        let result = unsafe { ffi::tk_sensor_fusion_update(self.engine_handle, delta_time_s) };
+        if result != ffi::TK_SUCCESS {
+            return Err(SensorsError::Ffi(format!(
+                "Failed to update sensor fusion state: {}",
+                result
+            )));
+        }
         Ok(())
     }
 
     /// Retrieves the latest, most up-to-date world state.
-    #[allow(dead_code)]
     pub fn get_world_state(&self) -> Result<WorldState, SensorsError> {
-        // Mock Implementation:
-        // 1. Create a `tk_world_state_t` on the stack.
-        // 2. Call `tk_sensor_fusion_get_world_state`.
-        // 3. Check the return code.
-        // 4. Convert the C struct into the safe Rust `WorldState` struct.
-        
-        log::debug!("Retrieving world state from fusion engine.");
-        let mock_state = WorldState {
-            orientation: Quaternion::new(1.0, 0.0, 0.0, 0.0), // Identity quaternion
-            motion_state: MotionState::Stationary,
-            is_speech_detected: false,
+        let mut c_world_state: ffi::tk_world_state_t = unsafe { std::mem::zeroed() };
+        let result = unsafe { ffi::tk_sensor_fusion_get_world_state(self.engine_handle, &mut c_world_state) };
+
+        if result != ffi::TK_SUCCESS {
+            return Err(SensorsError::Ffi(format!(
+                "Failed to get world state: {}",
+                result
+            )));
+        }
+
+        let orientation = Quaternion::new(
+            c_world_state.orientation.w,
+            c_world_state.orientation.x,
+            c_world_state.orientation.y,
+            c_world_state.orientation.z,
+        );
+
+        let motion_state = match c_world_state.motion_state {
+            ffi::tk_motion_state_e::TK_MOTION_STATE_UNKNOWN => MotionState::Unknown,
+            ffi::tk_motion_state_e::TK_MOTION_STATE_STATIONARY => MotionState::Stationary,
+            ffi::tk_motion_state_e::TK_MOTION_STATE_WALKING => MotionState::Walking,
+            ffi::tk_motion_state_e::TK_MOTION_STATE_RUNNING => MotionState::Running,
+            ffi::tk_motion_state_e::TK_MOTION_STATE_FALLING => MotionState::Falling,
         };
-        Ok(mock_state)
+
+        Ok(WorldState {
+            orientation,
+            motion_state,
+            is_speech_detected: c_world_state.is_speech_detected,
+        })
     }
 }
 
@@ -104,11 +161,5 @@ impl Drop for SensorFusionService {
         if !self.engine_handle.is_null() {
             unsafe { ffi::tk_sensor_fusion_destroy(&mut self.engine_handle) };
         }
-    }
-}
-
-impl Default for SensorFusionService {
-    fn default() -> Self {
-        Self::new().expect("Failed to create default SensorFusionService")
     }
 }

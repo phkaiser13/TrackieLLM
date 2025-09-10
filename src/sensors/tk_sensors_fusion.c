@@ -21,7 +21,7 @@ typedef void* FilterHandle;
 
 // FFI declarations for the functions implemented in Rust.
 // In a real build system, this would be in a generated header.
-extern FilterHandle rust_create_complementary_filter(float alpha);
+extern FilterHandle rust_create_kalman_filter(float process_noise, float measurement_noise);
 extern void rust_destroy_filter(FilterHandle handle);
 extern void rust_filter_update(
     FilterHandle handle,
@@ -57,11 +57,11 @@ TK_NODISCARD tk_error_code_t tk_sensor_fusion_create(tk_sensor_fusion_t** out_en
     engine->world_state.motion_state = TK_MOTION_STATE_UNKNOWN;
     engine->world_state.orientation.w = 1.0f; // Identity quaternion
 
-    // Create the Rust-side filter and store its handle.
-    // 0.98 is a common alpha value for complementary filters.
-    engine->rust_filter_handle = rust_create_complementary_filter(0.98f);
+    // Create the Rust-side Kalman filter and store its handle.
+    // These noise values are just defaults and may need tuning.
+    engine->rust_filter_handle = rust_create_kalman_filter(0.01f, 0.1f);
     if (!engine->rust_filter_handle) {
-        LOG_ERROR("Failed to create Rust complementary filter.");
+        LOG_ERROR("Failed to create Rust Kalman filter.");
         free(engine);
         return TK_ERROR_DRIVER_FAILED; // A more specific error would be better
     }
