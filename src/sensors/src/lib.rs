@@ -56,32 +56,87 @@
 // --- FFI Bindings Module ---
 mod ffi {
     #![allow(non_camel_case_types, non_snake_case, dead_code)]
+
+    use std::ffi::c_void;
+
     pub type tk_error_code_t = i32;
     pub const TK_SUCCESS: tk_error_code_t = 0;
 
-    // Forward declarations from the C headers
+    // Opaque type for the fusion engine handle
     pub enum tk_sensor_fusion_s {}
     pub type tk_sensor_fusion_t = tk_sensor_fusion_s;
 
-    // A subset of the FFI functions for demonstration
+    #[repr(C)]
+    #[derive(Debug, Copy, Clone)]
+    pub struct tk_sensor_fusion_config_t {
+        pub update_rate_hz: f32,
+        pub gyro_trust_factor: f32,
+    }
+
+    #[repr(C)]
+    #[derive(Debug, Copy, Clone)]
+    pub struct tk_imu_data_t {
+        pub timestamp_ns: u64,
+        pub acc_x: f32,
+        pub acc_y: f32,
+        pub acc_z: f32,
+        pub gyro_x: f32,
+        pub gyro_y: f32,
+        pub gyro_z: f32,
+        pub has_mag_data: bool,
+        pub mag_x: f32,
+        pub mag_y: f32,
+        pub mag_z: f32,
+    }
+
+    #[repr(C)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+    pub enum tk_motion_state_e {
+        TK_MOTION_STATE_UNKNOWN,
+        TK_MOTION_STATE_STATIONARY,
+        TK_MOTION_STATE_WALKING,
+        TK_MOTION_STATE_RUNNING,
+        TK_MOTION_STATE_FALLING,
+    }
+
+    #[repr(C)]
+    #[derive(Debug, Copy, Clone)]
+    pub struct tk_quaternion_t {
+        pub w: f32,
+        pub x: f32,
+        pub y: f32,
+        pub z: f32,
+    }
+
+    #[repr(C)]
+    #[derive(Debug, Copy, Clone)]
+    pub struct tk_world_state_t {
+        pub last_update_timestamp_ns: u64,
+        pub orientation: tk_quaternion_t,
+        pub motion_state: tk_motion_state_e,
+        pub is_speech_detected: bool,
+    }
+
     extern "C" {
         pub fn tk_sensor_fusion_create(
             out_engine: *mut *mut tk_sensor_fusion_t,
-            config: *const std::ffi::c_void, // Placeholder
+            config: *const tk_sensor_fusion_config_t,
         ) -> tk_error_code_t;
 
         pub fn tk_sensor_fusion_destroy(engine: *mut *mut tk_sensor_fusion_t);
 
         pub fn tk_sensor_fusion_inject_imu_data(
             engine: *mut tk_sensor_fusion_t,
-            imu_data: *const std::ffi::c_void, // Placeholder
+            imu_data: *const tk_imu_data_t,
         ) -> tk_error_code_t;
+
+        pub fn tk_sensor_fusion_inject_vad_state(engine: *mut tk_sensor_fusion_t, is_speech_active: bool);
 
         pub fn tk_sensor_fusion_update(engine: *mut tk_sensor_fusion_t, delta_time_s: f32) -> tk_error_code_t;
 
         pub fn tk_sensor_fusion_get_world_state(
             engine: *mut tk_sensor_fusion_t,
-            out_state: *mut std::ffi::c_void, // Placeholder
+            out_state: *mut tk_world_state_t,
         ) -> tk_error_code_t;
     }
 }

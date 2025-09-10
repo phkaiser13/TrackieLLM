@@ -9,13 +9,13 @@
  * (`tk_sensors_fusion.c`).
  *
  * The primary purpose is to allow the C code to leverage the safe, high-performance
- * Rust implementations of filters (like the Complementary Filter) without needing
+ * Rust implementations of filters (like the Kalman Filter) without needing
  * to reimplement that logic in C.
  *
  * SPDX-License-Identifier: AGPL-3.0 license
  */
 
-use crate::sensor_filters::{ComplementaryFilter, Filter};
+use crate::sensor_filters::{Filter, KalmanFilter};
 use nalgebra::{UnitQuaternion, Vector3};
 use std::ffi::c_void;
 
@@ -23,26 +23,29 @@ use std::ffi::c_void;
 /// This is an opaque pointer from the perspective of C.
 pub type FilterHandle = *mut c_void;
 
-/// Creates an instance of the ComplementaryFilter and returns an opaque handle to it.
+/// Creates an instance of the KalmanFilter and returns an opaque handle to it.
 ///
 /// # Safety
 /// The caller is responsible for eventually calling `rust_destroy_filter` on the
 /// returned handle to avoid memory leaks.
 #[no_mangle]
-pub unsafe extern "C" fn rust_create_complementary_filter(alpha: f32) -> FilterHandle {
-    let filter = Box::new(ComplementaryFilter::new(alpha));
+pub unsafe extern "C" fn rust_create_kalman_filter(
+    process_noise: f32,
+    measurement_noise: f32,
+) -> FilterHandle {
+    let filter = Box::new(KalmanFilter::new(process_noise, measurement_noise));
     Box::into_raw(filter) as FilterHandle
 }
 
-/// Destroys a filter instance that was created by `rust_create_complementary_filter`.
+/// Destroys a filter instance that was created by `rust_create_kalman_filter`.
 ///
 /// # Safety
-/// The handle must be a valid pointer returned by `rust_create_complementary_filter`.
+/// The handle must be a valid pointer returned by `rust_create_kalman_filter`.
 /// Calling this function with an invalid handle leads to undefined behavior.
 #[no_mangle]
 pub unsafe extern "C" fn rust_destroy_filter(handle: FilterHandle) {
     if !handle.is_null() {
-        let _ = Box::from_raw(handle as *mut ComplementaryFilter);
+        let _ = Box::from_raw(handle as *mut KalmanFilter);
     }
 }
 
@@ -66,7 +69,7 @@ pub unsafe extern "C" fn rust_filter_update(
     out_quat_y: *mut f32,
     out_quat_z: *mut f32,
 ) {
-    let filter = &mut *(handle as *mut ComplementaryFilter);
+    let filter = &mut *(handle as *mut KalmanFilter);
     let gyro = Vector3::new(gyro_x, gyro_y, gyro_z);
     let acc = Vector3::new(acc_x, acc_y, acc_z);
 

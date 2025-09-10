@@ -23,7 +23,6 @@ description = "A library for sensor data processing, filtering, and fusion, with
 crate-type = ["lib", "staticlib"]
 
 [dependencies]
-# This section would list external Rust libraries (crates) from crates.io.
-# Based on the analysis of the src files (lib.rs, ffi_bridge.rs, sensor_filters.rs, sensor_fusion.rs),
-# this module does not appear to have any external dependencies. It only uses standard library features
-# and modules defined within its own crate.
+log = "0.4.21"
+thiserror = "1.0.58"
+nalgebra = "0.32.3"

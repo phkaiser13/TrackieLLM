@@ -11,14 +11,8 @@
  * libraries. The implemented filters can be used by the `sensor_fusion` module
  * or any other part of the application that needs to process sensor data.
  *
- * The initial implementation includes:
- * - A `Filter` trait to define a common interface for filters.
- * - A `ComplementaryFilter` for fusing accelerometer and gyroscope data to
- *   estimate orientation. This filter is computationally cheap and provides
- *   good results for many applications.
- *
- * Future additions could include more advanced filters like the Kalman Filter
- * or Madgwick filter.
+ * The main implementation is the `KalmanFilter`, which provides a sophisticated
+ * approach to fusing accelerometer and gyroscope data for orientation tracking.
  *
  * Dependencies:
  *   - nalgebra: For vector and quaternion mathematics.
@@ -46,72 +40,6 @@ pub trait Filter {
 
     /// Returns the current output of the filter.
     fn output(&self) -> &Self::Output;
-}
-
-/// A complementary filter for 6-DOF IMU orientation estimation.
-///
-/// This filter combines the high-frequency orientation data from the gyroscope
-/// (which is accurate in the short-term but drifts over time) with the
-/// low-frequency orientation data from the accelerometer (which is noisy in the
-/// short-term but provides a stable long-term reference to gravity).
-///
-/// It "complements" the two data sources by high-pass filtering the gyroscope
-/// and low-pass filtering the accelerometer.
-pub struct ComplementaryFilter {
-    /// The current orientation estimate as a quaternion.
-    orientation: UnitQuaternion<f32>,
-    /// The filter's gain parameter (alpha). A higher value trusts the
-    /// accelerometer more, while a lower value trusts the gyroscope more.
-    alpha: f32,
-}
-
-impl ComplementaryFilter {
-    /// Creates a new `ComplementaryFilter`.
-    ///
-    /// # Arguments
-    /// * `alpha` - The filter gain, typically between 0.0 and 1.0. A common
-    ///   value is 0.98, meaning the final orientation is 98% from the integrated
-    ///   gyroscope and 2% from the accelerometer.
-    pub fn new(alpha: f32) -> Self {
-        Self {
-            orientation: UnitQuaternion::identity(),
-            alpha,
-        }
-    }
-}
-
-impl Filter for ComplementaryFilter {
-    type Output = UnitQuaternion<f32>;
-
-    fn update(&mut self, acc: Vector3<f32>, gyro: Vector3<f32>, dt: f32) {
-        // --- Gyroscope Integration ---
-        // Integrate the gyroscope reading to get the change in orientation.
-        // This is done by converting the angular velocity vector into a small
-        // rotation quaternion.
-        let gyro_quat = Quaternion::new(0.0, gyro.x * dt, gyro.y * dt, gyro.z * dt);
-        let estimated_orientation = self.orientation * gyro_quat;
-
-        // --- Accelerometer Correction ---
-        // Use the accelerometer to get an absolute orientation reference based on gravity.
-        // This is only valid when the device is not undergoing linear acceleration.
-        let acc_norm = acc.normalize();
-        // The accelerometer measures the direction of gravity. We can create a
-        // quaternion that represents the rotation from the "up" vector (0, 0, 1)
-        // to the measured acceleration vector.
-        let acc_orientation = UnitQuaternion::from_vectors(&Vector3::z(), &acc_norm)
-            .unwrap_or_else(UnitQuaternion::identity);
-        
-        // --- Fusion ---
-        // Combine the gyroscope-based estimate and the accelerometer-based
-        // reference using spherical linear interpolation (slerp). The `alpha`
-        // parameter controls the weight of each source.
-        self.orientation = estimated_orientation.slerp(&acc_orientation, 1.0 - self.alpha);
-        self.orientation.normalize_mut();
-    }
-
-    fn output(&self) -> &Self::Output {
-        &self.orientation
-    }
 }
 
 /// A simple first-order IIR (Infinite Impulse Response) low-pass filter.
@@ -162,21 +90,149 @@ impl LowPassFilter {
 }
 
 
-/// A placeholder for a future Kalman Filter implementation.
+/// An Attitude and Heading Reference System (AHRS) using a Kalman filter.
 ///
-/// A Kalman Filter is a more advanced and mathematically complex filter that
-/// can provide more accurate results by modeling the system's state and
-/// measurement uncertainty. Implementing it is a significant undertaking.
+/// This filter provides a more sophisticated approach than the complementary
+/// filter by explicitly modeling the system's state and uncertainty. It aims
+/// to estimate the orientation (as a quaternion) while correcting for gyroscope
+/// bias.
+///
+/// The implementation is a simplified Kalman filter for educational purposes
+/// and may require tuning for a specific IMU sensor.
 pub struct KalmanFilter {
-    // In a real implementation, this would contain state vectors, covariance
-    // matrices, and system models.
+    /// The state vector [q_w, q_x, q_y, q_z, bias_x, bias_y, bias_z].
+    x: nalgebra::OVector<f32, nalgebra::U7>,
+    /// The state covariance matrix.
+    p: nalgebra::OMatrix<f32, nalgebra::U7, nalgebra::U7>,
+    /// The process noise covariance matrix.
+    q: nalgebra::OMatrix<f32, nalgebra::U7, nalgebra::U7>,
+    /// The measurement noise covariance matrix.
+    r: nalgebra::OMatrix<f32, nalgebra::U3, nalgebra::U3>,
+    /// The current orientation estimate.
+    orientation: UnitQuaternion<f32>,
 }
 
 impl KalmanFilter {
-    /// Creates a new `KalmanFilter`.
-    #[allow(dead_code)]
-    pub fn new() -> Self {
-        // Placeholder
-        Self {}
+    /// Creates a new `KalmanFilter` with default parameters.
+    pub fn new(process_noise: f32, measurement_noise: f32) -> Self {
+        let mut x = nalgebra::OVector::<f32, nalgebra::U7>::zeros();
+        x[0] = 1.0; // Initial orientation is an identity quaternion
+
+        let p = nalgebra::OMatrix::<f32, nalgebra::U7, nalgebra::U7>::identity() * 1.0;
+        let q = nalgebra::OMatrix::<f32, nalgebra::U7, nalgebra::U7>::identity() * process_noise;
+        let r = nalgebra::OMatrix::<f32, nalgebra::U3, nalgebra::U3>::identity() * measurement_noise;
+
+        Self {
+            x,
+            p,
+            q,
+            r,
+            orientation: UnitQuaternion::identity(),
+        }
+    }
+}
+
+impl Filter for KalmanFilter {
+    type Output = UnitQuaternion<f32>;
+
+    fn update(&mut self, acc: Vector3<f32>, gyro: Vector3<f32>, dt: f32) {
+        // State and current orientation
+        let mut state = self.x.clone_owned();
+        let q_est = UnitQuaternion::new_normalize(Quaternion::new(state[0], state[1], state[2], state[3]));
+
+        // Gyro bias
+        let bias = Vector3::new(state[4], state[5], state[6]);
+        let gyro_corrected = gyro - bias;
+
+        // --- PREDICT ---
+        let (f, b) = Self::jacobian(&q_est, &gyro_corrected, dt);
+
+        let gyro_quat = Quaternion::from_parts(0.0, gyro_corrected * dt);
+        let q_pred = q_est * gyro_quat;
+
+        state[0] = q_pred.w;
+        state[1] = q_pred.i;
+        state[2] = q_pred.j;
+        state[3] = q_pred.k;
+
+        self.p = &f * &self.p * f.transpose() + &b * &self.q * b.transpose();
+
+        // --- UPDATE ---
+        let h = Self::measurement_jacobian(&q_pred);
+
+        let z_pred = UnitQuaternion::new_normalize(q_pred).to_rotation_matrix().transform_vector(&Vector3::z());
+        let y = acc.normalize() - z_pred; // Innovation
+
+        let s = &h * &self.p * h.transpose() + &self.r;
+        let k = self.p.clone_owned() * h.transpose() * s.try_inverse().unwrap_or_else(nalgebra::OMatrix::identity);
+
+        let delta_x = k * y;
+        state += delta_x;
+        self.p = (nalgebra::OMatrix::identity() - k * h) * self.p.clone_owned();
+
+        self.x = state;
+        self.x.fixed_rows_mut::<nalgebra::U4>(0).normalize_mut();
+
+        // Update the stored orientation
+        self.orientation = UnitQuaternion::new_normalize(Quaternion::new(
+            self.x[0], self.x[1], self.x[2], self.x[3]
+        ));
+    }
+
+    fn output(&self) -> &Self::Output {
+        &self.orientation
+    }
+}
+
+impl KalmanFilter {
+    /// Computes the state transition Jacobian (F) and process noise Jacobian (B).
+    fn jacobian(q: &UnitQuaternion<f32>, gyro: &Vector3<f32>, dt: f32) -> (nalgebra::OMatrix<f32, nalgebra::U7, nalgebra::U7>, nalgebra::OMatrix<f32, nalgebra::U7, nalgebra::U7>) {
+        let mut f = nalgebra::OMatrix::<f32, nalgebra::U7, nalgebra::U7>::identity();
+        let mut b = nalgebra::OMatrix::<f32, nalgebra::U7, nalgebra::U7>::zeros();
+
+        let q_w = q.w;
+        let q_x = q.i;
+        let q_y = q.j;
+        let q_z = q.k;
+
+        let sk_gyro = nalgebra::Matrix3::new(
+            0.0, -gyro.z, gyro.y,
+            gyro.z, 0.0, -gyro.x,
+            -gyro.y, gyro.x, 0.0,
+        );
+
+        let mut a_qq = nalgebra::Matrix4::zeros();
+        a_qq.fixed_slice_mut::<3, 3>(1, 1).copy_from(&sk_gyro);
+        a_qq.fixed_slice_mut::<3, 1>(1, 0).copy_from(&gyro);
+        a_qq.fixed_slice_mut::<1, 3>(0, 1).copy_from(&(-gyro.transpose()));
+
+        f.fixed_slice_mut::<4, 4>(0, 0).copy_from(&(nalgebra::Matrix4::identity() + 0.5 * dt * a_qq));
+
+        let mut a_qb = nalgebra::Matrix4x3::zeros();
+        a_qb[(0, 0)] = q_x; a_qb[(0, 1)] = q_y; a_qb[(0, 2)] = q_z;
+        a_qb[(1, 0)] = -q_w; a_qb[(1, 1)] = q_z; a_qb[(1, 2)] = -q_y;
+        a_qb[(2, 0)] = -q_z; a_qb[(2, 1)] = -q_w; a_qb[(2, 2)] = q_x;
+        a_qb[(3, 0)] = q_y; a_qb[(3, 1)] = -q_x; a_qb[(3, 2)] = -q_w;
+        f.fixed_slice_mut::<4, 3>(0, 4).copy_from(&(-0.5 * dt * a_qb));
+
+        b.fixed_slice_mut::<4, 4>(0, 0).copy_from(&(0.5 * dt * nalgebra::Matrix4::identity()));
+        b.fixed_slice_mut::<3, 3>(4, 4).copy_from(&(dt * nalgebra::Matrix3::identity()));
+
+        (f, b)
+    }
+
+    /// Computes the measurement Jacobian (H).
+    fn measurement_jacobian(q: &UnitQuaternion<f32>) -> nalgebra::OMatrix<f32, nalgebra::U3, nalgebra::U7> {
+        let mut h = nalgebra::OMatrix::<f32, nalgebra::U3, nalgebra::U7>::zeros();
+        let q_w = q.w;
+        let q_x = q.i;
+        let q_y = q.j;
+        let q_z = q.k;
+
+        h[(0, 0)] = -2.0 * q_y; h[(0, 1)] = 2.0 * q_z; h[(0, 2)] = -2.0 * q_w; h[(0, 3)] = 2.0 * q_x;
+        h[(1, 0)] = 2.0 * q_x; h[(1, 1)] = 2.0 * q_w; h[(1, 2)] = 2.0 * q_z; h[(1, 3)] = 2.0 * q_y;
+        h[(2, 0)] = 2.0 * q_w; h[(2, 1)] = -2.0 * q_x; h[(2, 2)] = -2.0 * q_y; h[(2, 3)] = 2.0 * q_z;
+
+        h
     }
 }
