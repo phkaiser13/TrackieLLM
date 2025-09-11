@@ -49,6 +49,7 @@ static tk_error_code_t event_payload_copy(tk_cortex_event_type_e type, void** de
 static void event_payload_free(tk_cortex_event_type_e type, void* payload);
 static tk_error_code_t deep_copy_vision_result(tk_vision_result_t** dest, const tk_vision_result_t* src);
 static tk_error_code_t deep_copy_transcription(tk_transcription_t** dest, const tk_transcription_t* src);
+static tk_error_code_t deep_copy_generic_event(tk_event_t** dest, const tk_event_t* src);
 
 // Forward-declare the Rust FFI function for processing generic events
 extern void tk_cortex_rust_process_event(const tk_event_t* event);
@@ -137,6 +138,54 @@ static tk_error_code_t event_queue_init(event_queue_t* queue, size_t capacity) {
         pthread_mutex_destroy(&queue->mutex);
         free(queue->events);
         return TK_ERROR_SYSTEM_ERROR;
+    }
+
+    return TK_SUCCESS;
+}
+
+/**
+ * @brief Creates a deep copy of a generic tk_event_t.
+ */
+static tk_error_code_t deep_copy_generic_event(tk_event_t** dest, const tk_event_t* src) {
+    if (!dest || !src) return TK_ERROR_INVALID_ARGUMENT;
+
+    *dest = calloc(1, sizeof(tk_event_t));
+    if (!*dest) return TK_ERROR_OUT_OF_MEMORY;
+
+    (*dest)->type = src->type;
+    (*dest)->timestamp_ns = src->timestamp_ns;
+
+    switch (src->type) {
+        case TK_EVENT_TYPE_VISION:
+            // tk_vision_event_t contains const pointers, so a shallow copy is sufficient
+            // as the underlying data is managed elsewhere (e.g., in a vision_result).
+            (*dest)->data.vision_event = src->data.vision_event;
+            break;
+        case TK_EVENT_TYPE_AUDIO:
+            // The text in tk_audio_event_t is a `const char*`. We must make a copy.
+            if (src->data.audio_event.text) {
+                // This is a bit awkward as the destination is a const char*.
+                // We allocate memory and cast away the constness on assignment.
+                // The free function will know to free this.
+                char* text_copy = strdup(src->data.audio_event.text);
+                if (!text_copy) {
+                    free(*dest);
+                    *dest = NULL;
+                    return TK_ERROR_OUT_OF_MEMORY;
+                }
+                (*dest)->data.audio_event.text = text_copy;
+            } else {
+                (*dest)->data.audio_event.text = NULL;
+            }
+            break;
+        case TK_EVENT_TYPE_SENSORS:
+            // tk_sensor_event_t is a simple struct, so a shallow copy is fine.
+            (*dest)->data.sensor_event = src->data.sensor_event;
+            break;
+        case TK_EVENT_TYPE_NONE:
+        default:
+            // No data to copy.
+            break;
     }
 
     return TK_SUCCESS;
@@ -654,6 +703,29 @@ tk_error_code_t tk_cortex_inject_video_frame(tk_cortex_t* cortex, const tk_video
     event_queue_enqueue(&cortex->event_queue, &video_event);
     
     return TK_SUCCESS;
+}
+
+tk_error_code_t tk_cortex_inject_sensor_event(tk_cortex_t* cortex, const tk_sensor_event_t* event) {
+    if (!cortex || !event) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+
+    // Create a generic event to wrap the sensor data.
+    // This event will be deep-copied by the event queue mechanism.
+    tk_event_t generic_event = {
+        .type = TK_EVENT_TYPE_SENSORS,
+        .timestamp_ns = get_current_time_ns(),
+        .data.sensor_event = *event
+    };
+
+    // Enqueue the generic event. The queue will handle the deep copy.
+    tk_cortex_event_t cortex_event = {
+        .type = CORTEX_EVENT_GENERIC_INPUT,
+        .payload = &generic_event, // Pass pointer to the stack-allocated event
+        .timestamp_ns = generic_event.timestamp_ns
+    };
+
+    return event_queue_enqueue(&cortex->event_queue, &cortex_event);
 }
 
 tk_error_code_t tk_cortex_get_state(const tk_cortex_t* cortex, tk_system_state_e* out_state) {
@@ -1476,6 +1548,10 @@ static tk_error_code_t event_payload_copy(tk_cortex_event_type_e type, void** de
     tk_error_code_t result = TK_SUCCESS;
 
     switch (type) {
+        case CORTEX_EVENT_GENERIC_INPUT:
+            result = deep_copy_generic_event((tk_event_t**)dest_payload, (const tk_event_t*)src_payload);
+            break;
+
         case CORTEX_EVENT_USER_SPEECH_FINAL:
             result = deep_copy_transcription((tk_transcription_t**)dest_payload, (const tk_transcription_t*)src_payload);
             break;
@@ -1507,6 +1583,18 @@ static void event_payload_free(tk_cortex_event_type_e type, void* payload) {
     }
 
     switch (type) {
+        case CORTEX_EVENT_GENERIC_INPUT: {
+            tk_event_t* event = (tk_event_t*)payload;
+            // Free any data that was deep-copied inside the generic event itself.
+            if (event->type == TK_EVENT_TYPE_AUDIO && event->data.audio_event.text) {
+                // We must cast away const to free the duplicated string.
+                free((void*)event->data.audio_event.text);
+            }
+            // Free the event container itself.
+            free(event);
+            break;
+        }
+
         case CORTEX_EVENT_USER_SPEECH_FINAL: {
             tk_transcription_t* transcription = (tk_transcription_t*)payload;
             // The const_cast is safe here because we are the owner of this memory.
