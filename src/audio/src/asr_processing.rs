@@ -23,7 +23,6 @@
  */
 
 use super::{ffi, AudioError, Transcription};
-use std::ffi::CStr;
 use std::ptr::null_mut;
 use thiserror::Error;
 

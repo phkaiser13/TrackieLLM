@@ -37,6 +37,7 @@
 #include "utils/tk_error_handling.h"
 #include "internal_tools/tk_file_manager.h"
 #include "tk_decision_engine.h" // Include for priority enum
+#include "tk_sound_classifier.h" // Include for sound classifier types
 
 // Forward-declare the primary pipeline object as an opaque type.
 typedef struct tk_audio_pipeline_s tk_audio_pipeline_t;
@@ -83,6 +84,9 @@ typedef struct {
     tk_path_t*        ww_model_path;      /**< Path to the Porcupine model file (.pv). */
     tk_path_t*        ww_keyword_path;    /**< Path to the Porcupine keyword file (.ppn). */
     float             ww_sensitivity;     /**< Sensitivity for the wake word (0.0 to 1.0). */
+
+    // Sound Classifier Model Path
+    tk_path_t*        sc_model_path;      /**< Path to the Sound Classifier ONNX model file. */
 
 
     // VAD specific parameters
@@ -140,13 +144,30 @@ typedef void (*tk_on_transcription_cb)(const tk_transcription_t* result, void* u
 typedef void (*tk_on_tts_audio_ready_cb)(const int16_t* audio_data, size_t frame_count, uint32_t sample_rate, void* user_data);
 
 /**
+ * @brief Callback for when TTS playback should be interrupted.
+ * The host application should immediately stop any ongoing audio playback.
+ * @param user_data The opaque user data pointer from the configuration.
+ */
+typedef void (*tk_on_tts_interrupt_cb)(void* user_data);
+
+/**
+ * @brief Callback for when an ambient sound is detected.
+ * @param result The details of the detected sound.
+ * @param user_data The opaque user data pointer from the configuration.
+ */
+typedef void (*tk_on_ambient_sound_detected_cb)(const tk_sound_detection_result_t* result, void* user_data);
+
+
+/**
  * @struct tk_audio_callbacks_t
  * @brief A structure to hold all callback functions for the audio pipeline.
  */
 typedef struct {
-    tk_on_vad_event_cb       on_vad_event;
-    tk_on_transcription_cb   on_transcription;
-    tk_on_tts_audio_ready_cb on_tts_audio_ready;
+    tk_on_vad_event_cb              on_vad_event;
+    tk_on_transcription_cb          on_transcription;
+    tk_on_tts_audio_ready_cb        on_tts_audio_ready;
+    tk_on_tts_interrupt_cb          on_tts_interrupt;
+    tk_on_ambient_sound_detected_cb on_ambient_sound_detected;
 } tk_audio_callbacks_t;
 
 #ifdef __cplusplus
@@ -249,6 +270,14 @@ TK_NODISCARD tk_error_code_t tk_audio_pipeline_synthesize_text(
  * This function is thread-safe.
  */
 TK_NODISCARD tk_error_code_t tk_audio_pipeline_force_transcription_end(tk_audio_pipeline_t* pipeline);
+
+/**
+ * @brief Gets the current operational state of the audio pipeline.
+ *
+ * @param[in] pipeline The audio pipeline instance.
+ * @return The current tk_pipeline_state_e value.
+ */
+tk_pipeline_state_e tk_audio_pipeline_get_state(tk_audio_pipeline_t* pipeline);
 
 
 //------------------------------------------------------------------------------
