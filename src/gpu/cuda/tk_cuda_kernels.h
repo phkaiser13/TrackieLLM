@@ -78,6 +78,20 @@ TK_NODISCARD tk_error_code_t tk_kernels_postprocess_depth_map(const tk_postproce
 TK_NODISCARD tk_error_code_t tk_kernels_depth_to_point_cloud(const tk_depth_to_points_params_t* params, cudaStream_t stream);
 
 
+/**
+ * @brief Launches a kernel to compute the softmax function on a 2D tensor.
+ *
+ * This operation is performed row-wise. It's a key component for attention
+ * layers in transformer models.
+ *
+ * @param[in] params A pointer to the softmax parameter structure.
+ * @param[in] stream The CUDA stream on which to launch the kernel.
+ *
+ * @return TK_SUCCESS if the kernel was successfully launched.
+ */
+TK_NODISCARD tk_error_code_t tk_kernels_softmax(const tk_softmax_params_t* params, cudaStream_t stream);
+
+
 #ifdef __cplusplus
 }
 #endif

@@ -105,4 +105,29 @@ typedef struct {
 } tk_depth_to_points_params_t;
 
 
+//------------------------------------------------------------------------------
+// Kernel: Softmax for Language Models
+//------------------------------------------------------------------------------
+
+/**
+ * @struct tk_softmax_params_t
+ * @brief Parameters for the softmax kernel.
+ *
+ * This kernel computes the softmax function along the rows of a 2D tensor.
+ * It is a fundamental building block for attention mechanisms in transformers.
+ */
+typedef struct {
+    // --- Input ---
+    const void* d_input_tensor; /**< DEVICE pointer/handle to the input tensor. */
+
+    // --- Output ---
+    void* d_output_tensor;      /**< DEVICE pointer/handle to the output tensor. */
+
+    // --- Tensor Shape ---
+    uint32_t num_rows;          /**< The number of rows (batch size or sequence length). */
+    uint32_t num_cols;          /**< The size of the dimension to apply softmax over. */
+
+} tk_softmax_params_t;
+
+
 #endif // TRACKIELLM_GPU_TK_GPU_HELPER_H

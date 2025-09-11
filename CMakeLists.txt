@@ -54,6 +54,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 #--------------------------------------------------------------------------------
 # These options allow developers to tailor the build to their specific hardware
 # and development needs, such as enabling or disabling specific GPU backends.
+option(TK_ENABLE_GPU "Master switch to enable any GPU backend" ON)
 option(TK_ENABLE_CUDA "Enable NVIDIA CUDA support for GPU acceleration" ON)
 option(TK_ENABLE_METAL "Enable Apple Metal support for GPU acceleration (macOS/iOS)" ON)
 option(TK_ENABLE_ROCM "Enable AMD ROCm support for GPU acceleration" OFF)

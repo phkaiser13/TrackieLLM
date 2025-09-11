@@ -26,3 +26,4 @@ crate-type = ["lib", "staticlib"]
 log = "0.4.21"
 thiserror = "1.0.58"
 nalgebra = "0.32.3"
+fusion-ahrs = "0.2.0"
