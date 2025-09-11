@@ -286,6 +286,19 @@ TK_NODISCARD tk_error_code_t tk_cortex_inject_audio_frame(tk_cortex_t* cortex, c
  */
 TK_NODISCARD tk_error_code_t tk_cortex_inject_video_frame(tk_cortex_t* cortex, const tk_video_frame_t* frame);
 
+/**
+ * @brief Injects a fused sensor data event into the Cortex.
+ *
+ * This function is thread-safe. It provides the latest world state information
+ * (e.g., from an IMU) to the system. The data is copied for processing.
+ *
+ * @param[in] cortex The Cortex instance.
+ * @param[in] event A pointer to the sensor event structure.
+ *
+ * @return TK_SUCCESS on success.
+ */
+TK_NODISCARD tk_error_code_t tk_cortex_inject_sensor_event(tk_cortex_t* cortex, const tk_sensor_event_t* event);
+
 //------------------------------------------------------------------------------
 // State Query
 //------------------------------------------------------------------------------

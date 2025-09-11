@@ -75,8 +75,12 @@ unsafe extern "C" fn on_transcription(
 /// A safe wrapper around the C `tk_audio_pipeline_t` handle.
 struct AudioPipelineWrapper {
     handle: *mut ffi::tk_audio_pipeline_t,
-    // Keep the context alive with the pipeline.
+    // Keep the context and CStrings alive with the pipeline.
     _context: Box<CallbackContext>,
+    _asr_path: CString,
+    _vad_path: CString,
+    _tts_path: CString,
+    _lang: CString,
 }
 
 impl AudioPipelineWrapper {
@@ -99,29 +103,37 @@ impl AudioPipelineWrapper {
             on_tts_audio_ready: None, // TTS audio is not handled via callback in this worker
         };
 
+        // Create CStrings to manage the lifetime of the path strings.
+        // These will be stored in the wrapper to ensure they live long enough.
+        let asr_path = CString::new("assets/models/whisper_tiny.en.ggml").unwrap();
+        let vad_path = CString::new("assets/models/silero_vad.onnx").unwrap();
+        let tts_path = CString::new("assets/models/piper_tts_en_us_lessac_medium").unwrap();
+        let lang = CString::new("en-US").unwrap();
+
         let config = ffi::tk_audio_pipeline_config_t {
             input_audio_params: ffi::tk_audio_params_t {
                 sample_rate: 16000,
                 channels: 1,
             },
-            asr_model_path: ptr::null(),
-            vad_model_path: ptr::null(),
-            tts_model_dir_path: ptr::null(),
-            user_language: CString::new("en").unwrap().into_raw(),
+            asr_model_path: asr_path.as_ptr() as *const ffi::tk_path_t,
+            vad_model_path: vad_path.as_ptr() as *const ffi::tk_path_t,
+            tts_model_dir_path: tts_path.as_ptr() as *const ffi::tk_path_t,
+            user_language: lang.as_ptr(),
             user_data: &mut *context as *mut _ as *mut c_void,
-            vad_silence_threshold_ms: 500.0,
+            vad_silence_threshold_ms: 700.0,
             vad_speech_probability_threshold: 0.5,
         };
 
         let err_code = ffi::tk_audio_pipeline_create(&mut handle, &config, callbacks);
 
-        // Free the language string we allocated.
-        let _ = CString::from_raw(config.user_language as *mut _);
-
         if err_code == 0 && !handle.is_null() {
             Ok(Self {
                 handle,
                 _context: context,
+                _asr_path: asr_path,
+                _vad_path: vad_path,
+                _tts_path: tts_path,
+                _lang: lang,
             })
         } else {
             Err(format!("Failed to create audio pipeline with code {}", err_code))

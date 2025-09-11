@@ -23,7 +23,7 @@
 
 use crate::event_bus::{DetectedObject, EventBus, TrackieEvent, VisionData};
 use crate::vision::ffi;
-use std::ffi::CStr;
+use std::ffi::{CStr, CString};
 use std::ptr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -44,18 +44,27 @@ impl VisionPipelineWrapper {
     unsafe fn new() -> Result<Self, String> {
         let mut handle: *mut ffi::tk_vision_pipeline_t = ptr::null_mut();
 
-        // For this worker, we create a mock configuration. A real application
-        // would load this from a file.
+        // In a real application, these paths would come from a config file.
+        // For this worker, we define them as placeholders. The C FFI needs
+        // valid, null-terminated strings. CString handles this for us.
+        let yolo_path = CString::new("assets/models/yolov5nu.onnx").unwrap();
+        let midas_path = CString::new("assets/models/midas_dpt_swin_tiny.onnx").unwrap();
+        let tesseract_path = CString::new("assets/tessdata").unwrap();
+
+        // The C API expects a pointer to tk_path_t, which is opaque.
+        // We can't create a `tk_path_t` directly, but we can cast the `*const c_char`
+        // from CString. This matches the likely C implementation where tk_path_t
+        // is a typedef for `char`.
         let config = ffi::tk_vision_pipeline_config_t {
             backend: ffi::tk_vision_backend_e::TK_VISION_BACKEND_CPU,
-            gpu_device_id: 0,
-            object_detection_model_path: ptr::null(), // Mocked
-            depth_estimation_model_path: ptr::null(), // Mocked
-            tesseract_data_path: ptr::null(),         // Mocked
+            gpu_device_id: -1, // Use -1 to explicitly request CPU
+            object_detection_model_path: yolo_path.as_ptr() as *const ffi::tk_path_t,
+            depth_estimation_model_path: midas_path.as_ptr() as *const ffi::tk_path_t,
+            tesseract_data_path: tesseract_path.as_ptr() as *const ffi::tk_path_t,
             object_confidence_threshold: 0.5,
-            max_detected_objects: 10,
-            focal_length_x: 500.0,
-            focal_length_y: 500.0,
+            max_detected_objects: 20,
+            focal_length_x: 525.0, // Example focal length
+            focal_length_y: 525.0,
         };
 
         let err_code = ffi::tk_vision_pipeline_create(&mut handle, &config);
