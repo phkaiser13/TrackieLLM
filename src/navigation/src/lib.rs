@@ -19,8 +19,12 @@
 pub mod free_space;
 pub mod obstacle_tracker;
 
-use free_space::{FreeSpaceConfig, FreeSpaceDetector, SpaceSector, TraversabilityMap, TraversabilityType};
-use obstacle_tracker::{ObstacleTracker, ObstacleTrackerConfig, TrackedObstacle, Vector2D, ObstacleStatus};
+// Re-export the necessary types to make them part of the public API.
+pub use free_space::SpaceSector;
+pub use obstacle_tracker::TrackedObstacle;
+
+use free_space::{FreeSpaceConfig, FreeSpaceDetector, TraversabilityMap, TraversabilityType};
+use obstacle_tracker::{ObstacleTracker, ObstacleTrackerConfig, Vector2D, ObstacleStatus};
 use std::slice;
 
 // --- FFI Bridge Implementation ---

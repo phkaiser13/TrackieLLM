@@ -44,7 +44,7 @@ libc = "0.2"
 
 # --- Workspace Crates ---
 # Provides the shared FFI type definitions (e.g., tk_error_code_t).
-trackiellm_ffi = { path = "../ffi" }
+trackie_ffi = { path = "../ffi" }
 
 # Provides shared event and data structures, like `NavigationData`.
 trackiellm_event_bus = { path = "../event_bus" }

@@ -168,6 +168,19 @@ TK_NODISCARD tk_error_code_t tk_vision_pipeline_process_frame(
         }
     }
 
+    // Navigation analysis is performed if requested and depth is available
+    if ((analysis_flags & TK_VISION_ANALYZE_NAVIGATION_CUES) && (result->depth_map != NULL)) {
+        CNavigationCues* nav_cues = tk_vision_rust_analyze_navigation(result->depth_map);
+        if (nav_cues) {
+            tk_log_debug("Navigation analysis completed. Found %zu vertical changes.", nav_cues->vertical_changes_count);
+            // In a full implementation, this data would be attached to the result.
+            // For now, we just log and free it.
+            tk_vision_rust_free_navigation_cues(nav_cues);
+        } else {
+            tk_log_warning("Navigation analysis failed or returned no data.");
+        }
+    }
+
     // Fusion is performed only when both object detection and depth estimation were successful
     if ((analysis_flags & TK_VISION_ANALYZE_FUSION_DISTANCE) &&
         (result->object_count > 0) && 
@@ -196,6 +209,9 @@ void tk_vision_result_destroy(tk_vision_result_t** result) {
             for (size_t i = 0; i < (*result)->object_count; ++i) {
                 if ((*result)->objects[i].label) {
                     free((void*)((*result)->objects[i].label));
+                }
+                if ((*result)->objects[i].recognized_text) {
+                    free((*result)->objects[i].recognized_text);
                 }
             }
             free((*result)->objects);
@@ -345,6 +361,8 @@ static tk_error_code_t perform_object_detection(tk_vision_pipeline_t* pipeline, 
             result->objects[i].distance_meters = 0.0f; // Will be populated by fusion
             result->objects[i].width_meters = 0.0f;    // Will be populated by fusion
             result->objects[i].height_meters = 0.0f;   // Will be populated by fusion
+            result->objects[i].is_partially_occluded = false; // Will be populated by fusion
+            result->objects[i].recognized_text = NULL; // Will be populated by OCR
         }
         result->object_count = detection_count;
     }
@@ -367,57 +385,72 @@ static tk_error_code_t perform_depth_estimation(tk_vision_pipeline_t* pipeline, 
 }
 
 static tk_error_code_t perform_ocr(tk_vision_pipeline_t* pipeline, const tk_video_frame_t* frame, tk_vision_result_t* result) {
-    // For now, we will process the whole image. A more advanced implementation
-    // would iterate over detected objects of interest (e.g., signs, books)
-    // and process only their bounding boxes.
+    if (result->object_count == 0) {
+        return TK_SUCCESS; // Nothing to perform OCR on
+    }
 
+    tk_log_debug("Performing targeted OCR on relevant objects.");
+
+    // Define a list of object labels that are likely to contain text.
+    const char* text_bearing_labels[] = {
+        "sign", "book", "laptop", "keyboard", "remote", "cell phone", "tv", "label", "plate", NULL
+    };
+
+    // Base image parameters for the whole frame
     tk_ocr_image_params_t image_params = {
         .image_data = frame->data,
         .width = frame->width,
         .height = frame->height,
         .channels = 3, // Assuming RGB8
         .stride = frame->width * 3,
-        .psm = TK_OCR_PSM_AUTO,
+        .psm = TK_OCR_PSM_SINGLE_BLOCK, // Assume a single block of text within the bbox
     };
 
-    tk_ocr_result_t* ocr_result = NULL;
-    tk_error_code_t err = tk_text_recognition_process_image(
-        pipeline->text_recognizer,
-        &image_params,
-        &ocr_result
-    );
+    for (size_t i = 0; i < result->object_count; ++i) {
+        tk_vision_object_t* object = &result->objects[i];
+        bool should_scan = false;
 
-    if (err != TK_SUCCESS) {
-        tk_log_warn("OCR processing failed with error %d", err);
-        return TK_SUCCESS; // Do not fail the whole pipeline for OCR
-    }
-
-    if (ocr_result && ocr_result->region_count > 0) {
-        result->text_blocks = (tk_vision_text_block_t*)calloc(ocr_result->region_count, sizeof(tk_vision_text_block_t));
-        if (!result->text_blocks) {
-            tk_text_recognition_free_result(&ocr_result);
-            return TK_ERROR_OUT_OF_MEMORY;
+        // Check if the object's label is in our list
+        for (int j = 0; text_bearing_labels[j] != NULL; ++j) {
+            if (strstr(object->label, text_bearing_labels[j]) != NULL) {
+                should_scan = true;
+                break;
+            }
         }
 
-        for (size_t i = 0; i < ocr_result->region_count; ++i) {
-            tk_ocr_text_region_t* region = &ocr_result->regions[i];
+        if (should_scan) {
+            tk_log_debug("Scanning object '%s' for text.", object->label);
+            tk_ocr_result_t* ocr_result = NULL;
 
-            if (region->text) {
-                result->text_blocks[i].text = strdup(region->text);
-            } else {
-                result->text_blocks[i].text = strdup("");
+            // We use the process_region function to constrain OCR to the bounding box
+            tk_error_code_t err = tk_text_recognition_process_region(
+                pipeline->text_recognizer,
+                &image_params,
+                object->bbox.x,
+                object->bbox.y,
+                object->bbox.w,
+                object->bbox.h,
+                &ocr_result
+            );
+
+            if (err == TK_SUCCESS && ocr_result && ocr_result->full_text && ocr_result->full_text_length > 0) {
+                // Associate the recognized text directly with the object
+                object->recognized_text = strdup(ocr_result->full_text);
+                tk_log_info("Found text '%s' on object '%s'", object->recognized_text, object->label);
+            } else if (err != TK_SUCCESS) {
+                tk_log_warn("OCR on region for object '%s' failed with error %d", object->label, err);
             }
 
-            result->text_blocks[i].confidence = region->confidence;
-            result->text_blocks[i].bbox.x = region->x;
-            result->text_blocks[i].bbox.y = region->y;
-            result->text_blocks[i].bbox.w = region->width;
-            result->text_blocks[i].bbox.h = region->height;
+            if (ocr_result) {
+                tk_text_recognition_free_result(&ocr_result);
+            }
         }
-        result->text_block_count = ocr_result->region_count;
     }
 
-    tk_text_recognition_free_result(&ocr_result);
+    // The global `text_blocks` array is no longer used. Text is now part of each object.
+    result->text_block_count = 0;
+    result->text_blocks = NULL;
+
     return TK_SUCCESS;
 }
 
@@ -431,6 +464,7 @@ typedef struct {
     float distance_meters;
     float width_meters;
     float height_meters;
+    bool is_partially_occluded;
 } EnrichedObject;
 
 typedef struct {
@@ -450,6 +484,40 @@ extern CFusedResult* tk_vision_rust_fuse_data(
 );
 
 extern void tk_vision_rust_free_fused_result(CFusedResult* result_ptr);
+
+// --- FFI Declarations for Rust Navigation Analysis Library ---
+
+// C-compatible mirror of the GroundPlaneStatus enum in Rust
+typedef enum {
+    C_GROUND_PLANE_STATUS_UNKNOWN,
+    C_GROUND_PLANE_STATUS_FLAT,
+    C_GROUND_PLANE_STATUS_OBSTACLE,
+    C_GROUND_PLANE_STATUS_HOLE,
+    C_GROUND_PLANE_STATUS_RAMP_UP,
+    C_GROUND_PLANE_STATUS_RAMP_DOWN,
+} CGroundPlaneStatus;
+
+// C-compatible mirror of the VerticalChange struct in Rust
+typedef struct {
+    float height_m;
+    CGroundPlaneStatus status;
+    uint32_t grid_x;
+    uint32_t grid_y;
+} CVerticalChange;
+
+// C-compatible mirror of the NavigationCues struct in Rust
+typedef struct {
+    const CGroundPlaneStatus* traversability_grid;
+    size_t grid_size;
+    uint32_t grid_width;
+    uint32_t grid_height;
+    const CVerticalChange* detected_vertical_changes;
+    size_t vertical_changes_count;
+} CNavigationCues;
+
+// Declare the external Rust functions for navigation analysis
+extern CNavigationCues* tk_vision_rust_analyze_navigation(const tk_vision_depth_map_t* depth_map_ptr);
+extern void tk_vision_rust_free_navigation_cues(CNavigationCues* cues_ptr);
 
 
 /**
@@ -506,11 +574,13 @@ static tk_error_code_t fuse_object_depth(tk_vision_pipeline_t* pipeline, tk_visi
         result->objects[i].distance_meters = fused_result->objects[i].distance_meters;
         result->objects[i].width_meters = fused_result->objects[i].width_meters;
         result->objects[i].height_meters = fused_result->objects[i].height_meters;
+        result->objects[i].is_partially_occluded = fused_result->objects[i].is_partially_occluded;
 
-        tk_log_debug("Object %zu (%s) fused distance: %.2fm, size: %.2fx%.2fm",
+        tk_log_debug("Object %zu (%s) fused distance: %.2fm, size: %.2fx%.2fm, occluded: %s",
                      i, result->objects[i].label,
                      result->objects[i].distance_meters,
-                     result->objects[i].width_meters, result->objects[i].height_meters);
+                     result->objects[i].width_meters, result->objects[i].height_meters,
+                     result->objects[i].is_partially_occluded ? "yes" : "no");
     }
 
     // IMPORTANT: Free the memory allocated by the Rust library

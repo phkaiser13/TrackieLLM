@@ -12,6 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+[lib]
+name = "trackiellm_workers"
+path = "src/lib.rs"
+
 [package]
 name = "trackiellm_workers"
 version = "0.1.0"
@@ -33,10 +37,10 @@ tokio = { version = "1.36.0", features = ["sync", "time"] }
 trackiellm_event_bus = { path = "../event_bus" }
 
 # Internal crate defining the FFI bridge to the C-based audio processing library.
-trackiellm_audio = { path = "../audio" }
+trackiellm_audio = { path = "../audio", package = "trackie-audio" }
 
 # Internal crate defining the FFI bridge to the C-based vision processing library.
-trackiellm_vision = { path = "../vision" }
+trackiellm_vision = { path = "../vision", package = "vision" }
 
 # Internal crate that provides the memory and reasoning components for the cortex worker.
 trackiellm_cortex = { path = "../cortex" }

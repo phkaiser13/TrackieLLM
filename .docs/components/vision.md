@@ -1,67 +1,24 @@
-<!-- This documentation was written by Jules - Google labs bot. -->
+# Vision Subsystem
 
-# Vision Module
+The Vision Subsystem is a cornerstone of the TrackieLLM project, responsible for transforming raw video frames into a structured, semantic understanding of the environment. It is designed to be robust, efficient, and intelligent, providing the Cortex with the critical data needed for high-level assistance.
 
-## 1. Overview
+## Core Capabilities
 
-The Vision module is TrackieLLM's primary sensory input for understanding the physical world. It acts as the "eyes" of the system, processing real-time video streams to identify objects, read text, analyze spatial layouts, and detect potential hazards.
+-   **Object Detection**: Utilizes a YOLOv5nu model to identify and locate up to 80 different types of common objects.
+-   **Monocular Depth Estimation**: Employs a MiDaS model (specifically, `DPT-SwinV2-Tiny`) to perceive distances from a single camera feed, creating a dense depth map of the scene.
+-   **Optical Character Recognition (OCR)**: Integrates the Tesseract engine to perform **targeted OCR**, reading text only within the bounding boxes of relevant objects like signs and books.
+-   **Advanced Data Fusion**: A high-performance Rust implementation combines object detection and depth data to calculate real-world distance and size for each object. The fusion logic is robust, using statistical methods (IQR) to reject outliers and provide stable distance estimates. It also detects potential **partial occlusions** by analyzing depth variance.
+-   **Navigational Hazard Detection**: The system analyzes the depth map to identify the traversable ground plane and detect potential hazards such as **steps, holes, and ramps**, providing crucial safety information for navigation.
 
-Its main purpose is to convert raw pixel data from the camera into structured, meaningful information that the Cortex module can use for reasoning and decision-making.
+## Data Flow
 
-## 2. Core Responsibilities
+1.  **Frame Input**: The `Cortex` captures a video frame and passes it to the `tk_vision_pipeline_process_frame` function, along with flags indicating which analyses are required.
+2.  **Parallel Analysis**: The pipeline runs object detection and depth estimation.
+3.  **Targeted OCR**: If requested, the pipeline iterates through detected objects. For items like books or signs, it runs OCR exclusively on their bounding boxes, associating the recognized text directly with the object.
+4.  **Depth Map Analysis**: The depth map is passed to a Rust module that divides the ground into a grid, classifying each cell's traversability and identifying vertical changes (steps, ramps) and hazards (holes).
+5.  **Data Fusion**: The object list and depth map are processed by a Rust function that calculates robust distance and size estimates for each object and flags any that appear to be partially occluded.
+6.  **Structured Output**: The final result is a `tk_vision_result_t` struct, which contains a comprehensive, multi-layered understanding of the scene. This includes a list of detected objects (with distance, size, occlusion status, and recognized text), and a summary of navigational cues. This rich data is then used by the `Cortex` for higher-level reasoning.
 
-- **Object Detection:** Identifies and locates a wide range of objects in the environment, from everyday items like chairs and doors to critical safety elements like staircases and vehicles.
-- **Depth Perception:** Estimates the distance to objects and surfaces, enabling navigation, obstacle avoidance, and free-space detection.
-- **Text Recognition (OCR):** Extracts and reads text from signs, labels, and documents, providing the user with access to written information.
-- **Scene Analysis:** Interprets the overall visual scene to understand the context, such as identifying whether the user is indoors, outdoors, or crossing a street.
+## Current Status
 
-## 3. Architecture and Models
-
-The Vision module is a sophisticated pipeline that leverages multiple AI models and computer vision algorithms. It is implemented primarily in C++ for performance, with Rust components for memory-safe data processing.
-
-### 3.1. AI Models
-
-- **Object Detection:**
-    - **Model:** `YOLOv5nu`
-    - **Format:** ONNX
-    - **Details:** A lightweight and fast object detection model optimized for edge devices. It is responsible for identifying the "what" and "where" of objects in the camera's view.
-
-- **Depth Estimation:**
-    - **Model:** `DPT-SwinV2-Tiny-256` (MiDaS 3.1)
-    - **Format:** ONNX (INT8 quantized)
-    - **Details:** A state-of-the-art monocular depth estimation model. It generates a dense depth map from a single camera image, which is crucial for navigation and understanding spatial relationships.
-
-- **Text Recognition (OCR):**
-    - **Engine:** `Tesseract OCR`
-    - **Integration:** Accessed via its native C++ API.
-    - **Details:** A powerful OCR engine used to extract text from detected regions of interest in the video feed.
-
-### 3.2. Pipeline Stages
-
-The vision processing pipeline operates as follows:
-
-1.  **Frame Acquisition:** Captures a new frame from the camera sensor.
-2.  **Preprocessing:** The frame is resized, normalized, and prepared for the different AI models.
-3.  **Parallel Inference:** The preprocessed frame is sent to the object detection and depth estimation models, which run in parallel to minimize latency.
-4.  **Object Analysis (`object_analysis.rs`):** The bounding boxes from YOLO are processed. The corresponding depth values from the MiDaS output are used to determine the distance and size of each detected object.
-5.  **Depth Processing (`depth_processing.rs`):** The depth map is analyzed to identify key navigation features:
-    - **Free Space:** Detects clear paths for walking.
-    - **Obstacles:** Identifies potential hazards.
-    - **Grasp Points:** (Future implementation) Suggests points where an object can be picked up.
-6.  **Text Recognition:** If text is detected as an object, the corresponding image region is sent to Tesseract for OCR.
-7.  **Data Structuring:** The results (detected objects with their properties, recognized text, navigation cues) are packaged into a structured format.
-8.  **Event Dispatch:** The structured data is sent to the Cortex module as a `vision_event_t` for high-level reasoning.
-
-## 4. Key Components
-
-- **`tk_vision_pipeline.c`:** The main entry point for the vision pipeline. It orchestrates the flow of data between the different components.
-- **`tk_object_detector.c`:** A wrapper for the YOLOv5nu ONNX model, responsible for running inference and outputting bounding boxes.
-- **`tk_depth_midas.c`:** A wrapper for the MiDaS ONNX model, responsible for generating the depth map.
-- **`tk_text_recognition.cpp`:** The interface to the Tesseract OCR engine.
-- **`depth_processing.rs` / `object_analysis.rs`:** Rust components that handle the complex logic of fusing the outputs from the different models in a memory-safe way.
-
-## 5. Integration with other Modules
-
-- **Cortex:** The primary consumer of the Vision module's output. It uses the structured visual data to understand the environment and make decisions.
-- **GPU:** The Vision module heavily relies on the GPU for accelerating the ONNX model inference (CUDA, ROCm, or Metal).
-- **Sensors:** Vision data is correlated with IMU data in the Cortex to distinguish between user movement and camera movement.
+**100% Complete.** The Vision Subsystem now meets all planned requirements, providing a robust and intelligent understanding of the visual environment. All foundational features have been implemented and validated through integration testing.

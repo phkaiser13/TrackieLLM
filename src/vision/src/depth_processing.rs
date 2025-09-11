@@ -3,145 +3,160 @@
  *
  * File: src/vision/depth_processing.rs
  *
- * This file provides a safe Rust wrapper for the Monocular Depth Estimation
- * engine, which is defined in `tk_depth_midas.h`. The `DepthEstimator`
- * is a specialized component responsible for inferring 3D depth from a 2D image.
+ * This file contains advanced analysis logic for depth maps, focusing on
+ * extracting navigation-related cues for the TrackieLLM system. It is
+ * responsible for identifying traversable ground, potential hazards like
+ * holes and steps, and other features that can inform the Cortex about
+ * the safety of the environment.
  *
- * This module encapsulates the `unsafe` FFI calls to the C-level depth
- * estimator, providing a high-level, idiomatic Rust API. It manages the
- * lifecycle of the `tk_depth_estimator_t` handle using the RAII pattern,
- * ensuring that resources are always released correctly.
- *
- * It is designed to be used by the main `VisionPipeline`, not directly by
- * the application's top-level logic, enforcing a hierarchical design.
- *
- * Dependencies:
- *   - crate::ffi: For the raw C function bindings.
- *   - crate::VisionError: For shared error handling.
- *   - thiserror: For ergonomic error handling.
+ * This logic is designed to be called from the C-level pipeline via FFI.
  *
  * SPDX-License-Identifier: AGPL-3.0 license
  */
 
-use super::{ffi, VisionError};
-use std::ptr::null_mut;
-use thiserror::Error;
+use super::ffi;
+use trackiellm_event_bus::{GroundPlaneStatus, NavigationCues, VerticalChange};
+use std::slice;
 
-/// Represents errors specific to the depth estimation process.
-#[derive(Debug, Error)]
-pub enum DepthError {
-    /// The underlying C-level context is not initialized.
-    #[error("Depth estimator context is not initialized.")]
-    NotInitialized,
+// --- Constants for Navigation Analysis ---
 
-    /// An FFI call to the depth estimation C library failed.
-    #[error("Depth estimation FFI call failed: {0}")]
-    Ffi(String),
-}
+/// The dimensions of the grid to impose on the ground plane (width, height).
+const GRID_DIMS: (u32, u32) = (5, 5);
+/// The vertical portion of the depth map to analyze (e.g., 0.5 means lower half).
+const GROUND_PLANE_VERTICAL_RATIO: f32 = 0.5;
+/// The minimum number of valid depth points required in a cell to consider it for analysis.
+const MIN_VALID_POINTS_PER_CELL: usize = 10;
+/// The depth difference (in meters) to classify something as a "hole" or "obstacle".
+const HOLE_OBSTACLE_THRESHOLD_M: f32 = 0.5;
+/// The depth difference (in meters) to classify a vertical change as a "step".
+const STEP_THRESHOLD_M: f32 = 0.1;
+/// The maximum depth difference to be considered a "ramp" instead of a step.
+const RAMP_THRESHOLD_M: f32 = 0.05;
 
-/// A safe wrapper for the depth map data returned by the C API.
+
+/// Analyzes a depth map to extract navigation cues like traversable area and hazards.
 ///
-/// This struct takes ownership of the C-allocated `tk_vision_depth_map_t`
-/// and ensures it is freed correctly when the struct is dropped.
-pub struct DepthMap {
-    /// A pointer to the C-level depth map struct.
-    ptr: *mut ffi::tk_vision_result_s, // This is a placeholder for the actual depth map struct from C
-}
-
-impl DepthMap {
-    /// Creates a new `DepthMap` from a raw pointer.
-    ///
-    /// # Safety
-    /// The caller must ensure that `ptr` is a valid pointer to a
-    /// `tk_vision_depth_map_t` allocated by the C API.
-    pub unsafe fn from_raw(ptr: *mut ffi::tk_vision_result_s) -> Self {
-        Self { ptr }
+/// # Arguments
+/// * `depth_map` - A pointer to the C-level depth map struct.
+///
+/// # Returns
+/// An `Option<NavigationCues>` containing the analysis results. Returns `None` if the
+/// depth map is invalid or analysis cannot be performed.
+pub fn analyze_navigation_cues(depth_map: &ffi::tk_vision_depth_map_t) -> Option<NavigationCues> {
+    if depth_map.data.is_null() || depth_map.width == 0 || depth_map.height == 0 {
+        return None;
     }
 
-    /// Returns the width of the depth map.
-    pub fn width(&self) -> u32 {
-        // In a real implementation:
-        // unsafe { (*self.ptr).width }
-        0 // Placeholder
-    }
+    let depth_data = unsafe {
+        slice::from_raw_parts(depth_map.data, (depth_map.width * depth_map.height) as usize)
+    };
 
-    /// Returns the height of the depth map.
-    pub fn height(&self) -> u32 {
-        // In a real implementation:
-        // unsafe { (*self.ptr).height }
-        0 // Placeholder
-    }
+    // Define the region of interest (lower part of the image)
+    let roi_y_start = (depth_map.height as f32 * (1.0 - GROUND_PLANE_VERTICAL_RATIO)) as u32;
+    let roi_height = depth_map.height - roi_y_start;
 
-    /// Returns a slice of the raw depth data (in meters).
-    pub fn data(&self) -> &[f32] {
-        // In a real implementation:
-        // unsafe {
-        //     std::slice::from_raw_parts((*self.ptr).data, (self.width() * self.height()) as usize)
-        // }
-        &[] // Placeholder
-    }
-}
+    let cell_width = depth_map.width / GRID_DIMS.0;
+    let cell_height = roi_height / GRID_DIMS.1;
 
-impl Drop for DepthMap {
-    /// Frees the C-allocated depth map.
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            // In a real implementation, this would call `tk_depth_estimator_free_map`.
-            // Since the result is part of the vision result, we let the owner free it.
+    let mut avg_depths = vec![0.0; (GRID_DIMS.0 * GRID_DIMS.1) as usize];
+    let mut traversability_grid = vec![GroundPlaneStatus::Unknown; avg_depths.len()];
+    let mut detected_vertical_changes = Vec::new();
+
+    // 1. Calculate the average depth for each cell in the grid
+    for gy in 0..GRID_DIMS.1 {
+        for gx in 0..GRID_DIMS.0 {
+            let x_start = gx * cell_width;
+            let y_start = roi_y_start + (gy * cell_height);
+            let x_end = x_start + cell_width;
+            let y_end = y_start + cell_height;
+
+            let mut valid_points = Vec::new();
+            for y in y_start..y_end {
+                for x in x_start..x_end {
+                    let idx = (y * depth_map.width + x) as usize;
+                    if idx < depth_data.len() && depth_data[idx] > 0.0 {
+                        valid_points.push(depth_data[idx]);
+                    }
+                }
+            }
+
+            if valid_points.len() >= MIN_VALID_POINTS_PER_CELL {
+                let sum: f32 = valid_points.iter().sum();
+                avg_depths[(gy * GRID_DIMS.0 + gx) as usize] = sum / valid_points.len() as f32;
+            }
         }
     }
-}
 
-/// A safe, high-level interface to the Depth Estimation Engine.
-pub struct DepthEstimator {
-    /// The handle to the underlying `tk_depth_estimator_t` C object.
-    #[allow(dead_code)]
-    estimator_handle: *mut ffi::tk_vision_pipeline_t, // Placeholder for tk_depth_estimator_t
-}
+    // 2. Analyze the grid to determine traversability and find hazards
+    // We assume the closest cell (bottom center) is our reference ground plane
+    let reference_cell_gx = GRID_DIMS.0 / 2;
+    let reference_cell_gy = GRID_DIMS.1 - 1; // Last row
+    let reference_idx = (reference_cell_gy * GRID_DIMS.0 + reference_cell_gx) as usize;
+    let reference_depth = avg_depths[reference_idx];
 
-impl DepthEstimator {
-    /// Creates a new `DepthEstimator`.
-    ///
-    /// This is a simplified constructor. A real implementation would take a
-    /// configuration struct and call `tk_depth_estimator_create`.
-    pub fn new() -> Result<Self, VisionError> {
-        // Placeholder for creating the estimator. In the actual design,
-        // this would be created and owned by the `VisionPipeline`.
-        Ok(Self {
-            estimator_handle: null_mut(),
-        })
+    if reference_depth <= 0.0 {
+        // Cannot perform analysis without a valid reference point
+        return None;
     }
 
-    /// Estimates the depth map for a given video frame.
-    ///
-    /// # Arguments
-    /// * `video_frame` - A representation of the video frame to process.
-    ///
-    /// # Returns
-    /// A `DepthMap` containing the estimated depth data.
-    #[allow(dead_code, unused_variables)]
-    pub fn estimate(&self, video_frame: &[u8]) -> Result<DepthMap, VisionError> {
-        // Mock Implementation:
-        // 1. Convert the video frame into a `tk_video_frame_t`.
-        // 2. Make the unsafe FFI call to `tk_depth_estimator_estimate`.
-        // 3. Check the return code.
-        // 4. Wrap the returned `tk_vision_depth_map_t*` in our safe `DepthMap` struct.
+    for gy in 0..GRID_DIMS.1 {
+        for gx in 0..GRID_DIMS.0 {
+            let current_idx = (gy * GRID_DIMS.0 + gx) as usize;
+            let current_depth = avg_depths[current_idx];
 
-        log::debug!("Simulating depth estimation...");
-        // This is a placeholder, as the real call is complex.
-        let mock_c_map_ptr: *mut ffi::tk_vision_result_s = null_mut();
-        
-        if mock_c_map_ptr.is_null() {
-            // Simulate a successful call that returns a (null) map
-             Ok(unsafe { DepthMap::from_raw(mock_c_map_ptr) })
-        } else {
-             Err(VisionError::InferenceFailed("Depth estimation failed".to_string()))
+            if current_depth <= 0.0 {
+                traversability_grid[current_idx] = GroundPlaneStatus::Unknown;
+                continue;
+            }
+
+            let depth_diff = current_depth - reference_depth;
+
+            // Basic classification
+            if depth_diff.abs() < RAMP_THRESHOLD_M {
+                traversability_grid[current_idx] = GroundPlaneStatus::Flat;
+            } else if depth_diff > HOLE_OBSTACLE_THRESHOLD_M {
+                traversability_grid[current_idx] = GroundPlaneStatus::Hole;
+            } else if depth_diff < -HOLE_OBSTACLE_THRESHOLD_M {
+                traversability_grid[current_idx] = GroundPlaneStatus::Obstacle;
+            }
+
+            // Check for vertical changes with the cell directly "below" (closer to the viewer)
+            if gy < GRID_DIMS.1 - 1 {
+                let below_idx = ((gy + 1) * GRID_DIMS.0 + gx) as usize;
+                let below_depth = avg_depths[below_idx];
+
+                if below_depth > 0.0 {
+                    let vertical_diff = current_depth - below_depth;
+
+                    if vertical_diff.abs() > STEP_THRESHOLD_M {
+                        let status = if vertical_diff > 0.0 {
+                            GroundPlaneStatus::Hole // A drop-off
+                        } else {
+                            GroundPlaneStatus::Obstacle // A step up
+                        };
+
+                        detected_vertical_changes.push(VerticalChange {
+                            height_m: vertical_diff.abs(),
+                            status,
+                            grid_index: (gx, gy),
+                        });
+                    } else if vertical_diff.abs() > RAMP_THRESHOLD_M {
+                         let status = if vertical_diff > 0.0 {
+                            GroundPlaneStatus::RampDown
+                        } else {
+                            GroundPlaneStatus::RampUp
+                        };
+                         traversability_grid[current_idx] = status;
+                    }
+                }
+            }
         }
     }
-}
 
-impl Default for DepthEstimator {
-    fn default() -> Self {
-        Self::new().expect("Failed to create default DepthEstimator")
-    }
+
+    Some(NavigationCues {
+        traversability_grid,
+        grid_dimensions: GRID_DIMS,
+        detected_vertical_changes,
+    })
 }

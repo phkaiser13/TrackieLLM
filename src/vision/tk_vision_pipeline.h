@@ -78,11 +78,18 @@ enum {
     TK_VISION_ANALYZE_FUSION_DISTANCE      = 1 << 3,
 
     /**
+     * @brief A meta-flag to enable the analysis of the depth map for navigation cues.
+     * Requires DEPTH_ESTIMATION to be active.
+     */
+    TK_VISION_ANALYZE_NAVIGATION_CUES      = 1 << 4,
+
+    /**
      * @brief A common preset for general environmental awareness.
      */
     TK_VISION_PRESET_ENVIRONMENT_AWARENESS = TK_VISION_ANALYZE_OBJECT_DETECTION |
                                              TK_VISION_ANALYZE_DEPTH_ESTIMATION |
-                                             TK_VISION_ANALYZE_FUSION_DISTANCE
+                                             TK_VISION_ANALYZE_FUSION_DISTANCE |
+                                             TK_VISION_ANALYZE_NAVIGATION_CUES
 };
 
 /**
@@ -124,6 +131,8 @@ typedef struct {
     float       distance_meters;/**< The estimated distance to the object in meters. Populated by fusion. */
     float       width_meters;   /**< The estimated width of the object in meters. Populated by fusion. */
     float       height_meters;  /**< The estimated height of the object in meters. Populated by fusion. */
+    bool        is_partially_occluded; /**< Flag indicating if the object might be partially occluded. Populated by fusion. */
+    char*       recognized_text;/**< Text recognized via OCR within this object's bbox. Owned by the object. */
 } tk_vision_object_t;
 
 /**

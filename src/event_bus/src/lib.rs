@@ -134,6 +134,45 @@ pub struct DetectedObject {
     pub distance: f32,
 }
 
+/// The classification of a specific area of the ground plane.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GroundPlaneStatus {
+    /// The status of this area is unknown.
+    Unknown,
+    /// This area is considered flat and safe to traverse.
+    Flat,
+    /// This area contains an obstacle that is too high to be a step.
+    Obstacle,
+    /// This area is a hole or a sharp drop-off.
+    Hole,
+    /// This area has a steep incline (ramp up).
+    RampUp,
+    /// This area has a steep decline (ramp down).
+    RampDown,
+}
+
+/// Describes a significant vertical change detected between grid cells, like a step or curb.
+#[derive(Debug, Clone, Copy)]
+pub struct VerticalChange {
+    /// The estimated height of the change in meters.
+    pub height_m: f32,
+    /// The classification of the vertical change.
+    pub status: GroundPlaneStatus,
+    /// The grid cell index where the change was detected.
+    pub grid_index: (u32, u32),
+}
+
+/// Represents the analysis of the ground plane for navigation purposes.
+#[derive(Debug, Clone, Default)]
+pub struct NavigationCues {
+    /// A 2D grid representing the traversability of the ground in front of the user.
+    pub traversability_grid: Vec<GroundPlaneStatus>,
+    /// The dimensions of the grid (width, height).
+    pub grid_dimensions: (u32, u32),
+    /// A list of detected steps, curbs, or other significant vertical changes.
+    pub detected_vertical_changes: Vec<VerticalChange>,
+}
+
 /// A simplified representation of the vision pipeline's complete output for a frame.
 #[derive(Debug, Clone)]
 pub struct VisionData {
@@ -141,6 +180,8 @@ pub struct VisionData {
     pub objects: Vec<DetectedObject>,
     /// The timestamp (in nanoseconds) of when the frame was captured.
     pub timestamp_ns: u64,
+    /// Optional navigation cues derived from the depth map analysis.
+    pub navigation_cues: Option<Arc<NavigationCues>>,
 }
 
 /// Defines all possible events that can be broadcast across the application.

@@ -1,0 +1,26 @@
+#
+# Copyright (C) 2025 Pedro Henrique / phdev13
+#
+# File: Cargo.toml
+#
+# Cargo manifest for the TrackieLLM profiling crate.
+# This crate provides tools for performance and memory profiling.
+#
+# SPDX-License-Identifier: AGPL-3.0 license
+#
+
+[package]
+name = "trackiellm_profiling"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0"
+authors = ["Pedro Henrique / phdev13"]
+description = "Performance and memory profiling tools for TrackieLLM."
+
+[lib]
+name = "trackiellm_profiling"
+path = "src/lib.rs"
+
+[dependencies]
+log = "0.4"
+lazy_static = "1.4"

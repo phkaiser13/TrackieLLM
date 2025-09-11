@@ -11,6 +11,11 @@ add_executable(tk_cortex_test tk_cortex_test.cpp)
 target_link_libraries(tk_cortex_test PRIVATE cortex vision audio navigation sensors utils internal_tools Threads::Threads)
 add_test(NAME cortex_integration_test COMMAND tk_cortex_test)
 
+# Add the full Vision Pipeline integration test
+add_executable(tk_vision_full_test tk_vision_full_test.c)
+target_link_libraries(tk_vision_full_test PRIVATE vision utils internal_tools)
+add_test(NAME vision_full_integration_test COMMAND tk_vision_full_test)
+
 # --- ALL OTHER TESTS DISABLED FOR DEBUGGING ---
 
 # # Find CUDA, which is required for GPU tests

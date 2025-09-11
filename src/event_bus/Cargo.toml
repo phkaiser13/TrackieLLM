@@ -28,8 +28,8 @@ tokio = { version = "1.36.0", features = ["sync"] }
 
 # Internal crate dependency that defines shared data structures for sensor fusion results,
 # like `WorldState`. The path assumes that 'sensors' is a sibling directory to 'event_bus'.
-trackiellm_sensors = { path = "../sensors" }
+trackiellm_sensors = { path = "../sensors", package = "sensors" }
 
 # Internal crate dependency that defines shared data structures for navigation analysis,
 # like `SpaceSector` and `TrackedObstacle`. The path assumes 'navigation' is a sibling directory.
-trackiellm_navigation = { path = "../navigation" }
+trackiellm_navigation = { path = "../navigation", package = "navigation" }
