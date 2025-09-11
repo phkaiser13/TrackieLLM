@@ -85,6 +85,33 @@ typedef enum {
 } tk_context_type_e;
 
 /**
+ * @enum tk_ambient_sound_type_e
+ * @brief Types of ambient sounds that can be detected.
+ */
+typedef enum {
+    TK_AMBIENT_SOUND_NONE,
+    TK_AMBIENT_SOUND_FIRE_ALARM,
+    TK_AMBIENT_SOUND_CAR_HORN,
+    TK_AMBIENT_SOUND_SIREN,
+    TK_AMBIENT_SOUND_BABY_CRYING,
+    TK_AMBIENT_SOUND_DOORBELL,
+} tk_ambient_sound_type_e;
+
+/**
+ * @enum tk_navigation_cue_type_e
+ * @brief Types of navigation cues detected in the immediate environment.
+ */
+typedef enum {
+    TK_NAVIGATION_CUE_NONE,
+    TK_NAVIGATION_CUE_STEP_UP,
+    TK_NAVIGATION_CUE_STEP_DOWN,
+    TK_NAVIGATION_CUE_DOORWAY,
+    TK_NAVIGATION_CUE_STAIRS_UP,
+    TK_NAVIGATION_CUE_STAIRS_DOWN,
+} tk_navigation_cue_type_e;
+
+
+/**
  * @struct tk_context_item_t
  * @brief Represents a single piece of contextual information.
  */
@@ -137,6 +164,10 @@ typedef struct {
     bool                is_listening_for_commands;
     float               system_confidence;      /**< Overall system confidence in current state. */
     tk_motion_state_e   user_motion_state;      /**< The user's current physical motion state. */
+
+    // New fields for ambient sound and navigation cues
+    tk_ambient_sound_type_e detected_sound_type; /**< Type of the most recently detected critical sound. */
+    tk_navigation_cue_type_e detected_navigation_cue; /**< Type of the most recently detected navigation cue. */
 } tk_context_summary_t;
 
 #ifdef __cplusplus
@@ -160,6 +191,36 @@ extern "C" {
 TK_NODISCARD tk_error_code_t tk_contextual_reasoner_create(
     tk_contextual_reasoner_t** out_reasoner,
     const tk_context_config_t* config
+);
+
+/**
+ * @brief Updates the context with a detected ambient sound event.
+ *
+ * @param[in] reasoner The contextual reasoner instance.
+ * @param[in] sound_type The type of sound detected.
+ * @param[in] confidence Confidence of the detection (0.0-1.0).
+ *
+ * @return TK_SUCCESS on successful update.
+ */
+TK_NODISCARD tk_error_code_t tk_contextual_reasoner_update_ambient_sound(
+    tk_contextual_reasoner_t* reasoner,
+    tk_ambient_sound_type_e sound_type,
+    float confidence
+);
+
+/**
+ * @brief Updates the context with a detected navigation cue.
+ *
+ * @param[in] reasoner The contextual reasoner instance.
+ * @param[in] cue_type The type of navigation cue detected.
+ * @param[in] distance_m Estimated distance to the cue.
+ *
+ * @return TK_SUCCESS on successful update.
+ */
+TK_NODISCARD tk_error_code_t tk_contextual_reasoner_update_navigation_cues(
+    tk_contextual_reasoner_t* reasoner,
+    tk_navigation_cue_type_e cue_type,
+    float distance_m
 );
 
 /**

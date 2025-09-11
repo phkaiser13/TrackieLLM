@@ -1,67 +1,65 @@
-<!-- This documentation was written by Jules - Google labs bot. -->
+# Módulo Cortex
 
-# Cortex Module
+**Status:** 100% Completo
 
-## 1. Overview
+## Visão Geral
 
-The Cortex module is the central processing unit of the TrackieLLM system, acting as the "brain" that drives intelligent and proactive behavior. It is responsible for integrating data from various subsystems (vision, audio, sensors), reasoning about the environment, and making decisions to assist the user.
+O Cortex é o cérebro central do sistema TrackieLLM. Ele é responsável por integrar todas as informações sensoriais, manter um modelo de mundo coeso, raciocinar sobre o contexto do usuário e tomar decisões proativas para garantir a segurança e a autonomia do usuário.
 
-Its primary goal is to transform raw sensor data into actionable insights, enabling the user to navigate and interact with their surroundings safely and efficiently.
+Esta versão final do Cortex representa a conclusão da visão do projeto, com um sistema de IA verdadeiramente proativo e consciente do contexto.
 
-## 2. Core Responsibilities
+## Arquitetura de Raciocínio
 
-- **Contextual Reasoning:** Fuses multimodal inputs (e.g., detected objects, spoken commands, ambient sounds) to build a comprehensive understanding of the user's current situation.
-- **Decision Making:** Evaluates the contextual model to determine the most appropriate action or feedback for the user, such as issuing a warning, providing navigation guidance, or answering a question.
-- **Memory Management:** Maintains short-term and long-term memory of the environment, user preferences, and past interactions to provide a personalized and consistent experience.
-- **LLM Integration:** Manages the interaction with the on-device Large Language Model (`Mistral-7B`), formatting prompts and interpreting the model's output to generate natural language feedback.
+O fluxo de raciocínio do Cortex foi aprimorado para fundir todas as fontes de dados em um único prompt dinâmico para o Large Language Model (LLM), garantindo que as informações mais críticas tenham a mais alta prioridade.
 
-## 3. Architecture
+### Fontes de Contexto Integradas:
 
-The Cortex module is implemented as a hybrid C and Rust system, leveraging the strengths of each language:
+*   **Visão Computacional:** Detecção de objetos, análise de texto e estimativa de profundidade.
+*   **Áudio Ambiente:** Detecção de sons críticos como alarmes de incêndio, sirenes e buzinas de carro.
+*   **Dicas de Navegação:** Detecção de características do ambiente como degraus (para cima/baixo) e escadas.
+*   **Estado do Usuário:** Detecção de movimento (parado, andando, correndo) e, criticamente, detecção de quedas.
+*   **Histórico de Conversa:** Memória de curto prazo das últimas interações do usuário.
+*   **Memória de Longo Prazo:** Fatos aprendidos sobre o usuário e o ambiente (ex: nome do usuário, locais familiares).
 
-- **C (`tk_cortex_main.c`, `tk_contextual_reasoner.c`, `tk_decision_engine.c`):** Provides a stable, low-level interface for integration with the rest of the C-based TrackieLLM framework. It handles the main event loop and dispatches tasks to the Rust components.
-- **Rust (`reasoning.rs`, `memory_manager.rs`):** Implements the core logic for reasoning, memory, and safety-critical computations, taking advantage of Rust's safety and performance features.
+### Geração de Prompt Dinâmico
 
-This hybrid architecture ensures both high performance and robust, memory-safe operation.
+A função `generate_prompt_for_llm` em `reasoning.rs` agora constrói o prompt com a seguinte prioridade:
 
-## 4. Key Components
+1.  **Alertas Críticos:** Se um alarme de incêndio ou uma queda for detectado, o prompt começa com "URGENTE:".
+2.  **Perigos de Navegação:** Dicas como degraus ou escadas são adicionadas em seguida.
+3.  **Contexto Geral:** O estado de movimento do usuário, objetos visíveis e informações da memória de longo prazo são incluídos.
+4.  **Consulta do Usuário:** A pergunta direta do usuário é adicionada por último.
 
-### 4.1. Contextual Reasoner (`tk_contextual_reasoner.c` & `reasoning.rs`)
+Este método garante que, mesmo que o usuário faça uma pergunta trivial, o LLM seja forçado a considerar primeiro os fatores de segurança mais importantes.
 
-- **Function:** Aggregates data streams from the Vision, Audio, and Sensor modules.
-- **Process:**
-    1. Receives inputs like identified objects, transcribed speech, and IMU data.
-    2. Constructs a "world model" representing the immediate environment.
-    3. Uses rule-based logic and heuristics to perform initial analysis (e.g., "is the object a hazard?").
-    4. Prepares a structured prompt for the LLM to perform higher-level reasoning.
+## Sistema de Decisão Proativa
 
-### 4.2. Decision Engine (`tk_decision_engine.c`)
+O motor de decisão (`tk_decision_engine.c`) evoluiu de um simples executor de ações para um guardião de segurança proativo.
 
-- **Function:** Takes the output from the Contextual Reasoner and the LLM to select a course of action.
-- **Process:**
-    1. Evaluates the LLM's suggestions against a set of safety constraints and operational modes.
-    2. Prioritizes critical alerts (e.g., collision warnings) over informational messages.
-    3. Translates the final decision into a command for another subsystem (e.g., an audio prompt for the TTS engine, a haptic signal).
+### Gatilhos de Ação Imediata
 
-### 4.3. Memory Manager (`memory_manager.rs`)
+O motor agora pode enfileirar ações de emergência *antes* mesmo de consultar o LLM, com base em gatilhos de alta prioridade do contexto:
 
-- **Function:** Provides the Cortex with a persistent memory layer.
-- **Features:**
-    - **Short-Term Memory:** Caches recent objects, locations, and interactions for immediate recall.
-    - **Long-Term Memory:** (Future implementation) Will store user preferences, familiar places, and important objects.
-    - **Data Association:** Links related information, such as associating a person's name with their face.
+*   **Gatilho de Queda:** Se `user_motion_state == TK_MOTION_STATE_FALLING`, uma ação `EMERGENCY_ALERT` com a mensagem "Queda detectada! Você está bem?" é imediatamente enfileirada.
+*   **Gatilho de Alarme de Incêndio:** Se `detected_sound_type == TK_AMBIENT_SOUND_FIRE_ALARM`, o sistema cancela todas as outras ações pendentes e enfileira um alerta de evacuação.
 
-## 5. Data Flow
+### Vetos de Segurança de Navegação
 
-1.  **Input:** The Cortex receives `tk_event_t` structures from other modules via a central event bus.
-2.  **Reasoning:** The Contextual Reasoner processes the event and updates its internal world model.
-3.  **LLM Query:** If complex reasoning is required, a query is sent to the `Mistral-7B` model.
-4.  **Decision:** The Decision Engine uses the reasoner's output and the LLM's response to choose an action.
-5.  **Output:** An action is dispatched as a command to the appropriate module (e.g., `audio_pipeline_say()`, `haptics_trigger()`).
+O motor de decisão agora tem o poder de vetar sugestões do LLM que possam ser perigosas:
 
-## 6. Integration with other Modules
+*   Se o LLM sugere uma ação `NAVIGATE_GUIDE` (ex: "Vire à direita"), mas o `context_summary` indica que o caminho não está livre, a ação é invalidada.
+*   Em vez de executar a ação perigosa, o motor a substitui por um aviso falado, como: "Eu ia sugerir virar à direita, mas detectei um obstáculo nesse caminho."
 
-- **Vision:** Receives object detection results, text recognition, and depth information.
-- **Audio:** Receives user commands (ASR) and provides text for synthesis (TTS).
-- **Sensors:** Receives fused sensor data (e.g., from IMU) to understand user movement and orientation.
-- **Interaction:** Sends commands to the feedback manager to communicate with the user (voice, haptics).
+## Sistema de Memória de Longo Prazo
+
+Para fornecer assistência personalizada, o Cortex agora possui uma memória de longo prazo persistente.
+
+### Armazenamento e Persistência
+
+*   A struct `LongTermMemory` em `memory_manager.rs` usa um `HashMap` para armazenar fatos chave-valor (ex: `"user_name": "Carlos"`).
+*   As funções `save_memory_to_disk` e `load_memory_from_disk` serializam e desserializam o conteúdo da memória para um arquivo JSON, garantindo que as informações persistam entre as sessões.
+
+### Aprendizado e Lembrança
+
+*   **Aprendizado:** Ações `SYSTEM_SETTING` geradas pelo LLM (ex: após o usuário dizer "Lembre-se que meu nome é Carlos") são interceptadas pelo motor de decisão, que chama uma função FFI para atualizar o `MemoryManager` em Rust.
+*   **Lembrança:** A função `generate_prompt_for_llm` inclui fatos relevantes da memória de longo prazo no prompt enviado ao LLM, fornecendo ao modelo o contexto necessário para personalizar suas respostas.

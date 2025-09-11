@@ -740,6 +740,13 @@ tk_error_code_t tk_cortex_get_state(const tk_cortex_t* cortex, tk_system_state_e
     return TK_SUCCESS;
 }
 
+tk_contextual_reasoner_t* tk_cortex_get_contextual_reasoner(tk_cortex_t* cortex) {
+    if (!cortex) {
+        return NULL;
+    }
+    return cortex->contextual_reasoner;
+}
+
 //------------------------------------------------------------------------------
 // Internal Implementation
 //------------------------------------------------------------------------------

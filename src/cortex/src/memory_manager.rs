@@ -33,11 +33,12 @@
  */
 
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
 
 /// Represents the different types of long-term memories that can be stored.
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum MemoryType {
     /// A key fact about the user, the environment, or the AI itself.
     Fact,
@@ -48,7 +49,7 @@ pub enum MemoryType {
 }
 
 /// A single, retrievable piece of information in long-term memory.
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MemoryFragment {
     /// A unique identifier for this memory.
     pub id: u64,
@@ -67,26 +68,18 @@ pub struct MemoryFragment {
 // --- Persistence Layer Design ---
 
 /// User-specific preferences that can be saved and loaded.
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct UserPreferences {
     /// The user's preferred language for TTS.
     pub language: String,
     /// The default level of detail for descriptions (0.0 to 1.0).
     pub detail_level: f32,
-    // Add other preferences here, e.g., voice selection.
-}
-
-impl Default for UserPreferences {
-    fn default() -> Self {
-        Self {
-            language: "en-US".to_string(),
-            detail_level: 0.5,
-        }
-    }
+    /// The user's name, as learned by the AI.
+    pub user_name: String,
 }
 
 /// Represents a location known to the system, with associated memories.
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct KnownPlace {
     pub name: String,
     /// A list of memory fragment IDs associated with this place.
@@ -94,10 +87,12 @@ pub struct KnownPlace {
 }
 
 /// Container for all data that is persisted to disk.
-#[derive(Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct LongTermMemory {
     pub preferences: UserPreferences,
     pub known_places: Vec<KnownPlace>,
+    /// General key-value storage for learned facts.
+    pub facts: HashMap<String, String>,
 }
 
 /// Represents errors that can occur within the Memory Manager.
@@ -174,23 +169,41 @@ impl MemoryManager {
         }
     }
 
-    /// (Design) Saves the long-term memory to a file.
+    /// Saves the long-term memory to a file.
     ///
-    /// In a real implementation, this would serialize the `LongTermMemory`
-    /// struct (likely as JSON or another format) and write it to disk.
-    pub fn save_to_disk(&self, _path: &std::path::Path) -> Result<(), MemoryError> {
-        log::info!("Simulating save of long-term memory to disk.");
-        // TODO: Implement serialization (e.g., with serde_json) and file I/O.
+    /// This function serializes the `LongTermMemory` struct into a JSON string
+    /// and writes it to the specified file path.
+    pub fn save_memory_to_disk(&self, path: &std::path::Path) -> Result<(), MemoryError> {
+        log::info!("Saving long-term memory to disk at {:?}", path);
+        let json_data = serde_json::to_string_pretty(&self.long_term_memory)
+            .map_err(|e| MemoryError::StorageFailed(format!("Serialization failed: {}", e)))?;
+
+        std::fs::write(path, json_data)
+            .map_err(|e| MemoryError::StorageFailed(format!("File write failed: {}", e)))?;
+
+        log::info!("Successfully saved long-term memory.");
         Ok(())
     }
 
-    /// (Design) Loads the long-term memory from a file.
+    /// Loads the long-term memory from a file.
     ///
-    /// In a real implementation, this would read from a file, deserialize
-    /// the data into the `LongTermMemory` struct, and populate the manager's state.
-    pub fn load_from_disk(&mut self, _path: &std::path::Path) -> Result<(), MemoryError> {
-        log::info!("Simulating load of long-term memory from disk.");
-        // TODO: Implement file reading and deserialization.
+    /// This function reads from a file, deserializes the JSON data into the
+    /// `LongTermMemory` struct, and populates the manager's state.
+    pub fn load_memory_from_disk(&mut self, path: &std::path::Path) -> Result<(), MemoryError> {
+        if !path.exists() {
+            log::warn!("Memory file not found at {:?}. Starting with empty memory.", path);
+            self.long_term_memory = LongTermMemory::default();
+            return Ok(());
+        }
+
+        log::info!("Loading long-term memory from disk at {:?}", path);
+        let json_data = std::fs::read_to_string(path)
+            .map_err(|e| MemoryError::StorageFailed(format!("File read failed: {}", e)))?;
+
+        self.long_term_memory = serde_json::from_str(&json_data)
+            .map_err(|e| MemoryError::StorageFailed(format!("Deserialization failed: {}", e)))?;
+
+        log::info!("Successfully loaded long-term memory.");
         Ok(())
     }
 
@@ -274,6 +287,16 @@ impl MemoryManager {
         } else {
             Err(MemoryError::NotFound(id))
         }
+    }
+
+    /// Gets a fact from the long-term memory.
+    pub fn get_fact(&self, key: &str) -> Option<&String> {
+        self.long_term_memory.facts.get(key)
+    }
+
+    /// Sets a fact in the long-term memory.
+    pub fn set_fact(&mut self, key: &str, value: &str) {
+        self.long_term_memory.facts.insert(key.to_string(), value.to_string());
     }
 }
 

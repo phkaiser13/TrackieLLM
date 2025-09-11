@@ -74,6 +74,14 @@ struct tk_contextual_reasoner_s {
     } environmental_state;
 
     /* ------------------------------------------------------------------ */
+    /*  Audio state                                                        */
+    /* ------------------------------------------------------------------ */
+    struct {
+        tk_ambient_sound_type_e last_detected_sound;
+        uint64_t                last_sound_update_ns;
+    } audio_state;
+
+    /* ------------------------------------------------------------------ */
     /*  Navigation state                                                   */
     /* ------------------------------------------------------------------ */
     struct {
@@ -84,6 +92,7 @@ struct tk_contextual_reasoner_s {
         size_t              hazard_count;
         size_t              hazard_capacity;
         tk_motion_state_e   motion_state; /* From sensor fusion */
+        tk_navigation_cue_type_e last_detected_cue;
         uint64_t            last_update_ns;
     } navigation_state;
 
@@ -164,6 +173,7 @@ tk_error_code_t tk_contextual_reasoner_create(tk_contextual_reasoner_t **out,
     }
 
     /* environmental state --------------------------------------------------- */
+    r->audio_state.last_detected_sound = TK_AMBIENT_SOUND_NONE;
     r->environmental_state.visible_object_capacity = 64;
     r->environmental_state.visible_objects = calloc(
         r->environmental_state.visible_object_capacity,
@@ -177,6 +187,7 @@ tk_error_code_t tk_contextual_reasoner_create(tk_contextual_reasoner_t **out,
 
     /* navigation state ------------------------------------------------------ */
     r->navigation_state.motion_state = TK_MOTION_STATE_UNKNOWN;
+    r->navigation_state.last_detected_cue = TK_NAVIGATION_CUE_NONE;
     r->navigation_state.hazard_capacity = 32;
     r->navigation_state.hazards = calloc(r->navigation_state.hazard_capacity,
                                          sizeof(tk_navigation_hazard_t));
@@ -223,6 +234,117 @@ tk_error_code_t tk_contextual_reasoner_get_motion_state(
     pthread_mutex_lock(&reasoner->state_mutex);
     *out_state = reasoner->navigation_state.motion_state;
     pthread_mutex_unlock(&reasoner->state_mutex);
+
+    return TK_SUCCESS;
+}
+
+/* ---------------------------------------------------------------------- */
+
+tk_error_code_t tk_contextual_reasoner_update_ambient_sound(
+    tk_contextual_reasoner_t* reasoner,
+    tk_ambient_sound_type_e sound_type,
+    float confidence)
+{
+    if (!reasoner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+
+    pthread_mutex_lock(&reasoner->state_mutex);
+    reasoner->audio_state.last_detected_sound = sound_type;
+    reasoner->audio_state.last_sound_update_ns = get_current_time_ns();
+    pthread_mutex_unlock(&reasoner->state_mutex);
+
+    if (sound_type != TK_AMBIENT_SOUND_NONE) {
+        char description[128];
+        const char* sound_str = "Unknown sound";
+        tk_context_priority_e priority = TK_CONTEXT_PRIORITY_MEDIUM;
+
+        switch(sound_type) {
+            case TK_AMBIENT_SOUND_FIRE_ALARM:
+                sound_str = "Fire alarm detected";
+                priority = TK_CONTEXT_PRIORITY_CRITICAL;
+                break;
+            case TK_AMBIENT_SOUND_SIREN:
+                sound_str = "Siren detected";
+                priority = TK_CONTEXT_PRIORITY_HIGH;
+                break;
+            case TK_AMBIENT_SOUND_CAR_HORN:
+                sound_str = "Car horn detected";
+                priority = TK_CONTEXT_PRIORITY_HIGH;
+                break;
+            case TK_AMBIENT_SOUND_BABY_CRYING:
+                sound_str = "Baby crying detected";
+                priority = TK_CONTEXT_PRIORITY_MEDIUM;
+                break;
+            case TK_AMBIENT_SOUND_DOORBELL:
+                sound_str = "Doorbell detected";
+                priority = TK_CONTEXT_PRIORITY_LOW;
+                break;
+            default:
+                break;
+        }
+
+        snprintf(description, sizeof(description), "%s (confidence: %.0f%%)", sound_str, confidence * 100.0f);
+
+        tk_contextual_reasoner_add_context_item(reasoner,
+            TK_CONTEXT_TYPE_ENVIRONMENTAL,
+            priority,
+            description,
+            NULL, 0);
+    }
+
+    return TK_SUCCESS;
+}
+
+/* ---------------------------------------------------------------------- */
+
+tk_error_code_t tk_contextual_reasoner_update_navigation_cues(
+    tk_contextual_reasoner_t* reasoner,
+    tk_navigation_cue_type_e cue_type,
+    float distance_m)
+{
+    if (!reasoner) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+
+    pthread_mutex_lock(&reasoner->state_mutex);
+    reasoner->navigation_state.last_detected_cue = cue_type;
+    pthread_mutex_unlock(&reasoner->state_mutex);
+
+    if (cue_type != TK_NAVIGATION_CUE_NONE) {
+        char description[128];
+        const char* cue_str = "Unknown navigation cue";
+        tk_context_priority_e priority = TK_CONTEXT_PRIORITY_HIGH;
+
+        switch(cue_type) {
+            case TK_NAVIGATION_CUE_STEP_UP:
+                cue_str = "Step up detected";
+                break;
+            case TK_NAVIGATION_CUE_STEP_DOWN:
+                cue_str = "Step down detected";
+                break;
+            case TK_NAVIGATION_CUE_DOORWAY:
+                cue_str = "Doorway detected";
+                priority = TK_CONTEXT_PRIORITY_MEDIUM;
+                break;
+            case TK_NAVIGATION_CUE_STAIRS_UP:
+                cue_str = "Stairs up detected";
+                break;
+            case TK_NAVIGATION_CUE_STAIRS_DOWN:
+                cue_str = "Stairs down detected";
+                break;
+            default:
+                break;
+        }
+
+        snprintf(description, sizeof(description), "%s at %.1fm", cue_str, distance_m);
+
+        tk_contextual_reasoner_add_context_item(reasoner,
+            TK_CONTEXT_TYPE_NAVIGATIONAL,
+            priority,
+            description,
+            NULL, 0);
+    }
 
     return TK_SUCCESS;
 }
@@ -547,6 +669,8 @@ tk_error_code_t tk_contextual_reasoner_get_context_summary(
     out_summary->is_listening_for_commands = reasoner->system_state.is_listening_for_commands;
     out_summary->system_confidence = reasoner->system_state.system_confidence;
     out_summary->user_motion_state = reasoner->navigation_state.motion_state;
+    out_summary->detected_sound_type = reasoner->audio_state.last_detected_sound;
+    out_summary->detected_navigation_cue = reasoner->navigation_state.last_detected_cue;
     pthread_mutex_unlock(&reasoner->state_mutex);
 
     return TK_SUCCESS;
