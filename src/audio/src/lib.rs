@@ -32,8 +32,8 @@
 // 5. Public Prelude
 // =============
 
-#![deny(unsafe_code)]
-#![deny(missing_docs)]
+#![allow(unsafe_code)] // Unsafe is required for FFI
+#![allow(missing_docs)] // TODO: Re-enable this lint and add documentation
 #![deny(warnings)]
 
 //! # TrackieLLM Audio Crate
@@ -48,7 +48,7 @@
 //! `process_chunk` method. The pipeline internally uses a Voice Activity
 //! Detector (VAD) to identify speech. When speech is detected, it is sent to
 //! the Automatic Speech Recognition (ASR) engine. The resulting transcription
-* is then sent back to the application via a callback.
+//! is then sent back to the application via a callback.
 //!
 //! For outgoing communication, the application can request speech synthesis
 //! via the `synthesize_text` method. The pipeline's Text-to-Speech (TTS) engine
@@ -73,7 +73,7 @@ pub mod tts_synthesis;
 use thiserror::Error;
 
 /// Represents a finalized transcription of a speech segment.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Transcription {
     /// The transcribed text.
     pub text: String,

@@ -14,7 +14,7 @@
  * SPDX-License-Identifier: AGPL-3.0 license
  */
 
-use std::ffi::{c_void, CStr, CString};
+use std::ffi::{c_void, CString};
 use std::os::raw::{c_char, c_int};
 use std::ptr::{null_mut, NonNull};
 use thiserror::Error;
@@ -30,7 +30,7 @@ mod ffi {
     pub struct tk_tts_piper_context_s {
         _private: [u8; 0],
     }
-    pub type tk_tts_piper_context_t = tk_tts_piper_context_s;
+    pub type TkTtsPiperContextT = tk_tts_piper_context_s;
 
     // Placeholder for tk_path_t from internal_tools
     #[repr(C)]
@@ -68,14 +68,14 @@ mod ffi {
     #[link(name = "trackie")]
     extern "C" {
         pub fn tk_tts_piper_create(
-            out_context: *mut *mut tk_tts_piper_context_t,
+            out_context: *mut *mut TkTtsPiperContextT,
             config: *const tk_tts_piper_config_t,
         ) -> c_int;
 
-        pub fn tk_tts_piper_destroy(context: *mut *mut tk_tts_piper_context_t);
+        pub fn tk_tts_piper_destroy(context: *mut *mut TkTtsPiperContextT);
 
         pub fn tk_tts_piper_synthesize_to_buffer(
-            context: *mut tk_tts_piper_context_t,
+            context: *mut TkTtsPiperContextT,
             text: *const c_char,
             out_audio_data: *mut *mut i16,
             out_frame_count: *mut usize,
@@ -112,7 +112,7 @@ pub struct TtsConfig<'a> {
 
 /// A safe, high-level interface to the Piper TTS Engine.
 pub struct TtsService {
-    context: NonNull<ffi::tk_tts_piper_context_t>,
+    context: NonNull<ffi::TkTtsPiperContextT>,
 }
 
 impl TtsService {
@@ -147,7 +147,7 @@ impl TtsService {
             audio_buffer_size: 0,
         };
 
-        let mut context_handle: *mut ffi::tk_tts_piper_context_t = null_mut();
+        let mut context_handle: *mut ffi::TkTtsPiperContextT = null_mut();
         let result = unsafe {
             ffi::tk_tts_piper_create(&mut context_handle, &c_config)
         };
@@ -233,7 +233,7 @@ mod tests {
         // This test does not require the model to be loaded.
         // It checks if the CString validation catches null bytes.
         let text_with_null = "Hello\0World";
-        let config = TtsConfig {
+        let _config = TtsConfig {
             model_path: MODEL_PATH,
             config_path: CONFIG_PATH,
             n_threads: 1,

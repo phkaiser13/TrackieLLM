@@ -38,6 +38,7 @@
 #include "tk_asr_whisper.h"
 #include "tk_tts_piper.h"
 #include "audio/tk_wake_word_porcupine.h" // Added for Wake Word
+#include "audio/tk_sound_classifier.h" // Added for Sound Classifier
 #include "utils/tk_logging.h"
 #include "utils/tk_error_handling.h"
 
@@ -77,6 +78,7 @@ struct tk_audio_pipeline_s {
 
     // Models and engines
     tk_porcupine_context_t*    porcupine_context; // Wake Word engine
+    tk_sound_classifier_context_t* sound_classifier_context; // Sound Classifier engine
     tk_vad_silero_context_t*   vad_context;
     tk_asr_whisper_context_t*  whisper_context;
     tk_tts_piper_context_t*    piper_context;
@@ -115,6 +117,10 @@ struct tk_audio_pipeline_s {
     atomic_bool                worker_thread_running;
     cnd_t                      worker_cond;
     mtx_t                      worker_mutex;
+
+    // State transition timing
+    uint64_t                   state_transition_time_ns;
+    bool                       vad_detected_speech_since_transition;
 
     // Error handling
     tk_error_code_t            last_error;
@@ -196,6 +202,23 @@ TK_NODISCARD tk_error_code_t tk_audio_pipeline_create(
         free(pipeline);
         return result;
     }
+
+    // Load Sound Classifier model
+    if (config->sc_model_path) {
+        tk_sound_classifier_config_t sc_config = {0};
+        sc_config.model_path = config->sc_model_path;
+        sc_config.sample_rate = pipeline->sample_rate;
+        sc_config.n_threads = 2; // Default value
+        sc_config.detection_threshold = 0.7f; // Default value, can be tuned
+        result = tk_sound_classifier_create(&pipeline->sound_classifier_context, &sc_config);
+        if (result != TK_SUCCESS) {
+            TK_LOG_ERROR("Failed to initialize Sound Classifier engine: %d", result);
+            tk_porcupine_destroy(&pipeline->porcupine_context);
+            free(pipeline->asr_audio_buffer);
+            free(pipeline);
+            return result;
+        }
+    }
     pipeline->porcupine_frame_length = tk_porcupine_get_frame_length(pipeline->porcupine_context);
     pipeline->porcupine_buffer = malloc(pipeline->porcupine_frame_length * sizeof(int16_t));
 
@@ -273,6 +296,8 @@ TK_NODISCARD tk_error_code_t tk_audio_pipeline_create(
     pipeline->tts_queue_head = 0;
     pipeline->tts_queue_tail = 0;
     pipeline->tts_queue_size = 0;
+    pipeline->state_transition_time_ns = 0;
+    pipeline->vad_detected_speech_since_transition = false;
 
     // Initialize threading primitives
     if (mtx_init(&pipeline->worker_mutex, mtx_plain) != thrd_success) {
@@ -330,6 +355,7 @@ void tk_audio_pipeline_destroy(tk_audio_pipeline_t** pipeline) {
     tk_asr_whisper_destroy(&p->whisper_context);
     tk_vad_silero_destroy(&p->vad_context);
     tk_porcupine_destroy(&p->porcupine_context);
+    tk_sound_classifier_destroy(&p->sound_classifier_context);
 
     // Clean up buffers
     if (p->porcupine_buffer) {
@@ -441,38 +467,61 @@ TK_NODISCARD tk_error_code_t tk_audio_pipeline_force_transcription_end(
     return TK_SUCCESS;
 }
 
+tk_pipeline_state_e tk_audio_pipeline_get_state(tk_audio_pipeline_t* pipeline) {
+    if (!pipeline) {
+        return TK_PIPELINE_STATE_IDLE; // Or some other error indicator
+    }
+    return (tk_pipeline_state_e)atomic_load(&pipeline->current_state);
+}
+
 //------------------------------------------------------------------------------
 // Internal Helper Functions
 //------------------------------------------------------------------------------
 
-static void process_audio_for_wakeword(tk_audio_pipeline_t* pipeline) {
+static void process_audio_for_passive_listening(tk_audio_pipeline_t* pipeline) {
     size_t available_frames = (pipeline->input_buffer_head - pipeline->input_buffer_tail + TK_AUDIO_PIPELINE_INTERNAL_BUFFER_SIZE) % TK_AUDIO_PIPELINE_INTERNAL_BUFFER_SIZE;
 
-    while (available_frames > 0) {
-        size_t frames_to_copy = pipeline->porcupine_frame_length - pipeline->porcupine_buffer_size;
-        if (frames_to_copy > available_frames) {
-            frames_to_copy = available_frames;
-        }
-
-        // Copy frames to porcupine buffer
-        for (size_t i = 0; i < frames_to_copy; i++) {
-            pipeline->porcupine_buffer[pipeline->porcupine_buffer_size + i] = pipeline->input_buffer[pipeline->input_buffer_tail];
+    // We process audio in chunks matching Porcupine's frame length
+    while (available_frames >= pipeline->porcupine_frame_length) {
+        // Copy a chunk for processing
+        int16_t process_buffer[pipeline->porcupine_frame_length];
+        for (size_t i = 0; i < pipeline->porcupine_frame_length; i++) {
+            process_buffer[i] = pipeline->input_buffer[pipeline->input_buffer_tail];
             pipeline->input_buffer_tail = (pipeline->input_buffer_tail + 1) % TK_AUDIO_PIPELINE_INTERNAL_BUFFER_SIZE;
         }
-        pipeline->porcupine_buffer_size += frames_to_copy;
-        available_frames -= frames_to_copy;
+        available_frames -= pipeline->porcupine_frame_length;
 
-        // If porcupine buffer is full, process it
-        if (pipeline->porcupine_buffer_size == pipeline->porcupine_frame_length) {
-            int keyword_index = -1;
-            tk_error_code_t result = tk_porcupine_process(pipeline->porcupine_context, pipeline->porcupine_buffer, &keyword_index);
-            pipeline->porcupine_buffer_size = 0; // Reset buffer
+        // 1. Process for Wake Word
+        int keyword_index = -1;
+        tk_error_code_t ww_result = tk_porcupine_process(pipeline->porcupine_context, process_buffer, &keyword_index);
+        if (ww_result == TK_SUCCESS && keyword_index != -1) {
+            TK_LOG_INFO("Wake word detected! Keyword index: %d", keyword_index);
+            atomic_store(&pipeline->current_state, TK_PIPELINE_STATE_LISTENING_FOR_COMMAND);
 
-            if (result == TK_SUCCESS && keyword_index != -1) {
-                TK_LOG_INFO("Wake word detected! Keyword index: %d", keyword_index);
-                atomic_store(&pipeline->current_state, TK_PIPELINE_STATE_LISTENING_FOR_COMMAND);
-                // Optional: trigger a callback here
-                break; // Exit loop and switch to VAD processing
+            struct timespec ts;
+            timespec_get(&ts, TIME_UTC);
+            pipeline->state_transition_time_ns = (uint64_t)ts.tv_sec * 1000000000 + ts.tv_nsec;
+            pipeline->vad_detected_speech_since_transition = false;
+
+            // Wake word detected, no need to process for ambient sound in this chunk
+            return;
+        }
+
+        // 2. Process for Ambient Sound (if classifier exists)
+        if (pipeline->sound_classifier_context) {
+            tk_sound_detection_result_t sc_result;
+            tk_error_code_t sc_err = tk_sound_classifier_process(
+                pipeline->sound_classifier_context,
+                process_buffer,
+                pipeline->porcupine_frame_length,
+                &sc_result
+            );
+
+            if (sc_err == TK_SUCCESS && sc_result.sound_class != TK_SOUND_UNKNOWN) {
+                if (pipeline->callbacks.on_ambient_sound_detected) {
+                    TK_LOG_INFO("Ambient sound detected: %d (Confidence: %.2f)", sc_result.sound_class, sc_result.confidence);
+                    pipeline->callbacks.on_ambient_sound_detected(&sc_result, pipeline->config.user_data);
+                }
             }
         }
     }
@@ -500,12 +549,13 @@ static void process_audio_for_vad(tk_audio_pipeline_t* pipeline) {
 
 static int worker_thread_func(void* arg) {
     tk_audio_pipeline_t* pipeline = (tk_audio_pipeline_t*)arg;
-    
+    const uint64_t listen_timeout_ns = 5 * 1000000000ULL; // 5 seconds
+
     while (atomic_load(&pipeline->worker_thread_running)) {
         if (mtx_lock(&pipeline->worker_mutex) != thrd_success) { continue; }
 
-        while (pipeline->input_buffer_head == pipeline->input_buffer_tail && 
-               pipeline->tts_queue_size == 0 && 
+        while (pipeline->input_buffer_head == pipeline->input_buffer_tail &&
+               pipeline->tts_queue_size == 0 &&
                atomic_load(&pipeline->worker_thread_running)) {
             cnd_wait(&pipeline->worker_cond, &pipeline->worker_mutex);
         }
@@ -519,12 +569,25 @@ static int worker_thread_func(void* arg) {
         tk_pipeline_state_e state = atomic_load(&pipeline->current_state);
         switch (state) {
             case TK_PIPELINE_STATE_AWAITING_WAKE_WORD:
-                process_audio_for_wakeword(pipeline);
+                process_audio_for_passive_listening(pipeline);
                 break;
-            
+
             case TK_PIPELINE_STATE_LISTENING_FOR_COMMAND:
-                process_audio_for_vad(pipeline);
-                // TODO: Add timeout to transition back to AWAITING_WAKE_WORD
+                {
+                    // Check for listening timeout
+                    struct timespec ts;
+                    timespec_get(&ts, TIME_UTC);
+                    uint64_t current_time_ns = (uint64_t)ts.tv_sec * 1000000000 + ts.tv_nsec;
+
+                    if (!pipeline->vad_detected_speech_since_transition &&
+                        (current_time_ns - pipeline->state_transition_time_ns) > listen_timeout_ns) {
+
+                        TK_LOG_INFO("Listening timeout. No speech detected. Returning to AWAITING_WAKE_WORD state.");
+                        atomic_store(&pipeline->current_state, TK_PIPELINE_STATE_AWAITING_WAKE_WORD);
+                    } else {
+                        process_audio_for_vad(pipeline);
+                    }
+                }
                 break;
 
             default:
@@ -714,6 +777,7 @@ static void vad_event_callback(tk_vad_silero_event_e event, void* user_data) {
     switch (event) {
         case TK_VAD_EVENT_SPEECH_STARTED:
             TK_LOG_DEBUG("VAD: Speech started.");
+            pipeline->vad_detected_speech_since_transition = true;
             reset_asr_state(pipeline);
             break;
             
@@ -886,11 +950,18 @@ static tk_error_code_t enqueue_tts_request_with_priority(
  * @brief Interrupt current TTS processing
  */
 static void interrupt_current_tts(tk_audio_pipeline_t* pipeline) {
-    // Set interruption flag
+    TK_LOG_INFO("Interrupting current TTS playback due to higher priority request.");
+    // Set interruption flag to stop feeding new audio chunks from the callback
     atomic_store(&pipeline->tts_interrupt_requested, true);
-    
-    // If Piper supports interruption, call it here
-    // tk_tts_piper_interrupt(pipeline->piper_context);
+
+    // Signal the host application to stop its audio player immediately
+    if (pipeline->callbacks.on_tts_interrupt) {
+        pipeline->callbacks.on_tts_interrupt(pipeline->config.user_data);
+    }
+
+    // Note: We don't call tk_tts_piper_interrupt because piper is blocking
+    // and doesn't have an interruption mechanism. The playback must be stopped
+    // by the consumer of the audio chunks.
 }
 
 static tk_error_code_t process_next_tts_request(tk_audio_pipeline_t* pipeline) {
