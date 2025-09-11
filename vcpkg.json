@@ -23,7 +23,7 @@
     },
     {
       "name": "nlohmann-json",
-      "description": "JSON parser and serializer for C++ configurations.",
+      "description": "JSON parser and serializer for C++ configurations, Header only lib.",
       "features": []
     },
     {
