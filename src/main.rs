@@ -22,6 +22,7 @@ mod async_tasks;
 mod audio;
 mod cortex;
 mod event_bus;
+mod sensors;
 mod vision;
 mod workers;
 
@@ -70,6 +71,11 @@ async fn main() {
     ));
     println!("[Orchestrator] Cortex worker spawned.");
 
+    let sensor_handle = task_manager.spawn(workers::sensor_worker::run(
+        event_bus.clone(),
+    ));
+    println!("[Orchestrator] Sensor worker spawned.");
+
     println!("[Orchestrator] All workers are running.");
 
     // --- 3. Await and Manage Shutdown ---
@@ -95,8 +101,8 @@ async fn main() {
     // terminate.
     let shutdown_timeout = tokio::time::Duration::from_secs(10);
     if tokio::time::timeout(shutdown_timeout, async {
-        let (vision_res, audio_res, cortex_res) =
-            tokio::join!(vision_handle, audio_handle, cortex_handle);
+        let (vision_res, audio_res, cortex_res, sensor_res) =
+            tokio::join!(vision_handle, audio_handle, cortex_handle, sensor_handle);
         // Check if any worker panicked.
         if let Err(e) = vision_res {
             eprintln!("[Orchestrator] Vision worker panicked: {:?}", e);
@@ -106,6 +112,9 @@ async fn main() {
         }
         if let Err(e) = cortex_res {
             eprintln!("[Orchestrator] Cortex worker panicked: {:?}", e);
+        }
+        if let Err(e) = sensor_res {
+            eprintln!("[Orchestrator] Sensor worker panicked: {:?}", e);
         }
     })
     .await

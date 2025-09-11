@@ -215,10 +215,29 @@ pub async fn run(event_bus: Arc<EventBus>) {
                         let mock_audio = [0i16; 160];
                         unsafe { ffi::tk_cortex_inject_audio_frame(cortex.handle, mock_audio.as_ptr(), mock_audio.len()); }
                     }
-                    TrackieEvent::SensorFusionResult(world_state) => {
-                        // Inject the sensor data using our new function.
+                    TrackieEvent::SensorFusionResult(sensor_data) => {
+                        // Manually convert from the event bus's safe Rust struct
+                        // to the FFI-compatible C struct.
+                        let c_world_state = crate::sensors::ffi::tk_world_state_t {
+                            last_update_timestamp_ns: sensor_data.last_update_timestamp_ns,
+                            orientation: crate::sensors::ffi::tk_quaternion_t {
+                                w: sensor_data.orientation.w,
+                                x: sensor_data.orientation.x,
+                                y: sensor_data.orientation.y,
+                                z: sensor_data.orientation.z,
+                            },
+                            motion_state: match sensor_data.motion_state {
+                                crate::event_bus::MotionState::Stationary => crate::sensors::ffi::tk_motion_state_e::TK_MOTION_STATE_STATIONARY,
+                                crate::event_bus::MotionState::Walking => crate::sensors::ffi::tk_motion_state_e::TK_MOTION_STATE_WALKING,
+                                crate::event_bus::MotionState::Running => crate::sensors::ffi::tk_motion_state_e::TK_MOTION_STATE_RUNNING,
+                                crate::event_bus::MotionState::Falling => crate::sensors::ffi::tk_motion_state_e::TK_MOTION_STATE_FALLING,
+                                _ => crate::sensors::ffi::tk_motion_state_e::TK_MOTION_STATE_UNKNOWN,
+                            },
+                            is_speech_detected: sensor_data.is_speech_detected,
+                        };
+
                         let event = ffi::tk_sensor_event_t {
-                            world_state: *world_state,
+                            world_state: c_world_state,
                         };
                         unsafe { ffi::tk_cortex_inject_sensor_event(cortex.handle, &event); }
                     }

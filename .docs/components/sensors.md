@@ -10,41 +10,45 @@ This data is essential for distinguishing between camera movement and world move
 
 ## 2. Core Responsibilities
 
--   **Sensor Data Acquisition:** Interfaces with the hardware drivers to read raw data from the IMU (accelerometer, gyroscope) and any other low-level sensors.
+-   **Sensor Data Acquisition:** Interfaces with the hardware drivers to read raw data from the IMU (accelerometer, gyroscope).
 -   **Sensor Fusion:** Combines data from multiple sensors to produce a more accurate and stable estimate of the device's state. For example, it fuses accelerometer and gyroscope data to combat drift.
--   **Motion and Orientation Tracking:** Provides the rest of the system with a real-time understanding of the device's orientation (roll, pitch, yaw) and acceleration.
--   **Event Detection:** (Future implementation) Will detect specific motion events like gestures (e.g., a nod for "yes"), a fall, or a sudden jolt.
+-   **High-Level State Classification:** Abstracts raw data into meaningful states, such as classifying the user's motion as `STATIONARY` or `WALKING`.
+-   **Data Provisioning:** Makes the fused and classified sensor data available to the rest of the application in a safe and structured way.
 
 ## 3. Architecture
 
-The Sensors module is designed to be a lightweight and efficient component, running in the background to provide a continuous stream of state information. It is implemented in C and Rust.
+The Sensors module follows the hybrid Rust/C architecture used by other components like Vision and Audio. It consists of a C library that handles low-level logic and a Rust "worker" that integrates this logic into the main asynchronous application.
 
--   **C (`tk_sensors_fusion.c`):** Provides the main interface for the module and handles the direct communication with the sensor hardware drivers.
--   **Rust (`sensor_fusion.rs`, `sensor_filters.rs`):** Implements the core sensor fusion algorithms and filters (e.g., Kalman filters, complementary filters) in a memory-safe environment. This is where the complex mathematical computations happen.
+-   **C Layer (`tk_sensors_fusion.c`)**: This layer is responsible for the core sensor fusion algorithms. It exposes a simple API (`tk_sensor_fusion_create`, `tk_sensor_fusion_get_world_state`, etc.) to be consumed by Rust. For testing purposes, this layer contains a `MOCK_SENSORS` compile-time flag that enables it to generate simulated, predictable data without real hardware.
 
-### 3.1. Pipeline
+-   **Rust Worker (`src/workers/sensor_worker.rs`)**: This is the bridge between the C layer and the rest of the TrackieLLM application. It is responsible for:
+    1.  **Lifecycle Management:** Using a safe RAII `SensorFusionWrapper`, it ensures that the C-level `tk_sensor_fusion_t` object is properly created on startup and destroyed on shutdown.
+    2.  **Polling:** It runs in a `tokio` asynchronous loop, periodically (e.g., every 50ms) calling the `tk_sensor_fusion_get_world_state` FFI function to get the latest data.
+    3.  **Event Publishing:** After retrieving the data, it converts the FFI-safe C struct (`tk_world_state_t`) into a pure Rust struct (`SensorFusionData`). It then wraps this data in an `Arc` and publishes it on the central `EventBus` as a `TrackieEvent::SensorFusionResult`.
 
-1.  **Raw Data Reading:** The module continuously polls the IMU sensor for new accelerometer and gyroscope readings.
-2.  **Filtering (`sensor_filters.rs`):** The raw data is passed through filters to reduce noise and remove biases.
-3.  **Fusion (`sensor_fusion.rs`):** The filtered accelerometer and gyroscope data are fused to calculate a stable estimate of the device's orientation (quaternion or Euler angles).
-4.  **Data Publishing:** The fused sensor data is published as a `sensor_event_t` to the central event bus, making it available to other modules.
+## 4. Data Flow and Integration with Cortex
 
-## 4. Key Components
+The data from the sensor module is critical for the Cortex's situational awareness. The end-to-end data flow is as follows:
 
--   **`tk_sensors_fusion.c`:** The central component that orchestrates the data flow within the module.
--   **`sensor_fusion.rs`:** The Rust component containing the core logic for combining sensor data. It likely implements a complementary or Kalman filter to get the best estimate of orientation.
--   **`sensor_filters.rs`:** Contains various digital filters (e.g., low-pass, high-pass) used to clean up the raw sensor signals before fusion.
--   **`tk_vad_silero.c`:** This file seems to be misplaced in the `sensors` directory in the original project structure, as it's related to audio processing (Voice Activity Detection). It is functionally part of the Audio module.
+1.  **Polling:** The `sensor_worker` calls the C function `tk_sensor_fusion_get_world_state()`. In mock mode, this function returns simulated data that alternates between `STATIONARY` and `WALKING`.
 
-## 5. Integration with other Modules
+2.  **Publication:** The worker publishes the `SensorFusionResult` event to the `EventBus`.
 
--   **Cortex:** The Cortex module is a primary consumer of the sensor data. It uses the orientation information to:
-    -   Stabilize the world model (e.g., compensating for head movements when tracking an object).
-    -   Infer user intent (e.g., a downward head tilt might imply looking at the ground).
-    -   Improve navigation by tracking the user's path.
+3.  **Consumption by Cortex Worker:** The `cortex_worker` in Rust subscribes to the `EventBus`. When it receives the `SensorFusionResult` event, it converts the data back into a C-compatible struct (`tk_sensor_event_t`).
 
--   **Vision:** The vision pipeline uses the IMU data for tasks like:
-    -   **Electronic Image Stabilization (EIS):** Removing jitter from the video feed.
-    -   **Sensor-Aided Tracking:** Predicting the location of an object in the next frame based on camera motion.
+4.  **Injection into C-Cortex:** The `cortex_worker` calls the C function `tk_cortex_inject_sensor_event`, passing the C-compatible struct.
 
--   **Audio:** The audio module can use the accelerometer data to detect footsteps and dynamically adjust the noise cancellation profile.
+5.  **Contextual Reasoner Update:** Inside `tk_cortex_main.c`, the injected event is handled. The handler calls `tk_contextual_reasoner_update_motion_context()`, passing the sensor data. This function updates the `motion_state` field inside the `tk_contextual_reasoner_t` object, making the user's current motion state officially part of the Cortex's "world model".
+
+6.  **Intelligent Decision-Making:** The `tk_decision_engine.c` leverages this new information. When processing a response from the LLM, it first checks the user's motion state via the `context_summary`. If the user is moving (`WALKING` or `RUNNING`) and the LLM suggests a simple description of a potential obstacle (e.g., "There is a chair in front of you"), the decision engine enhances the action, transforming it from a simple `SPEAK` action into a higher-priority `NAVIGATE_WARN` action (e.g., "Caution, chair ahead!").
+
+This complete flow ensures that the sensor data is not just collected, but actively used to make the system's responses safer and more context-aware.
+
+## 5. Key Components
+
+-   **`tk_sensors_fusion.c` / `.h`:** The C library for sensor fusion and mocking.
+-   **`src/workers/sensor_worker.rs`:** The Rust async worker that drives the polling and event publishing.
+-   **`src/event_bus/mod.rs`:** Defines the `SensorFusionData` struct and the `TrackieEvent::SensorFusionResult` variant.
+-   **`src/cortex/tk_cortex_main.c`:** Receives the injected event from the `cortex_worker`.
+-   **`src/cortex/tk_contextual_reasoner.c`:** Stores the motion state as part of its world model.
+-   **`src/cortex/tk_decision_engine.c`:** Uses the motion state to make smarter decisions.

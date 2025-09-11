@@ -28,13 +28,89 @@
 //!
 //! Provides a system-wide communication channel for asynchronous events.
 
+use crate::sensors::ffi;
 use std::sync::Arc;
 use tokio::sync::broadcast::{self, Receiver, Sender};
-use trackiellm_sensors::WorldState;
 use trackiellm_navigation::{SpaceSector, TrackedObstacle};
 
 
 // --- Public Data Structures ---
+
+/// High-level classification of the user's current motion.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MotionState {
+    /// The state cannot be determined yet.
+    Unknown,
+    /// The user is still.
+    Stationary,
+    /// The user is walking at a steady pace.
+    Walking,
+    /// The user is running.
+    Running,
+    /// A potential fall event has been detected (freefall).
+    Falling,
+}
+
+impl From<ffi::tk_motion_state_e> for MotionState {
+    fn from(c_state: ffi::tk_motion_state_e) -> Self {
+        match c_state {
+            ffi::tk_motion_state_e::TK_MOTION_STATE_STATIONARY => Self::Stationary,
+            ffi::tk_motion_state_e::TK_MOTION_STATE_WALKING => Self::Walking,
+            ffi::tk_motion_state_e::TK_MOTION_STATE_RUNNING => Self::Running,
+            ffi::tk_motion_state_e::TK_MOTION_STATE_FALLING => Self::Falling,
+            _ => Self::Unknown,
+        }
+    }
+}
+
+/// Represents orientation in 3D space.
+#[derive(Debug, Clone, Copy)]
+pub struct Quaternion {
+    /// W component of the quaternion.
+    pub w: f32,
+    /// X component of the quaternion.
+    pub x: f32,
+    /// Y component of the quaternion.
+    pub y: f32,
+    /// Z component of the quaternion.
+    pub z: f32,
+}
+
+impl From<ffi::tk_quaternion_t> for Quaternion {
+    fn from(c_quat: ffi::tk_quaternion_t) -> Self {
+        Self {
+            w: c_quat.w,
+            x: c_quat.x,
+            y: c_quat.y,
+            z: c_quat.z,
+        }
+    }
+}
+
+/// The fused, high-level output of the sensor fusion engine.
+#[derive(Debug, Clone, Copy)]
+pub struct SensorFusionData {
+    /// Timestamp of the last update.
+    pub last_update_timestamp_ns: u64,
+    /// The absolute orientation of the device in space.
+    pub orientation: Quaternion,
+    /// The user's classified motion state.
+    pub motion_state: MotionState,
+    /// The current state from the Voice Activity Detector.
+    pub is_speech_detected: bool,
+}
+
+impl From<ffi::tk_world_state_t> for SensorFusionData {
+    fn from(c_state: ffi::tk_world_state_t) -> Self {
+        Self {
+            last_update_timestamp_ns: c_state.last_update_timestamp_ns,
+            orientation: c_state.orientation.into(),
+            motion_state: c_state.motion_state.into(),
+            is_speech_detected: c_state.is_speech_detected,
+        }
+    }
+}
+
 
 /// Contains the combined output of the navigation analysis modules.
 #[derive(Debug, Clone)]
@@ -75,8 +151,8 @@ pub struct VisionData {
 pub enum TrackieEvent {
     /// Published by the vision worker when a new frame has been analyzed.
     VisionResult(Arc<VisionData>),
-    /// Published by the sensor fusion service when the world state is updated.
-    SensorFusionResult(Arc<WorldState>),
+    /// Published by the sensor worker when the world state is updated.
+    SensorFusionResult(Arc<SensorFusionData>),
     /// Published by the navigation engines when spatial analysis is complete.
     NavigationResult(Arc<NavigationData>),
     /// Published by the audio worker when a full sentence has been transcribed.

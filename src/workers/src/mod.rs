@@ -26,5 +26,8 @@ pub mod audio_worker;
 /// The worker responsible for the core reasoning and decision-making loop.
 pub mod cortex_worker;
 
+/// The worker responsible for the sensor fusion pipeline.
+pub mod sensor_worker;
+
 /// The worker responsible for the visual processing pipeline.
 pub mod vision_worker;

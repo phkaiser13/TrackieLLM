@@ -15,6 +15,8 @@
 #include "tk_logging.h"
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
+#include <time.h>
 
 // Opaque handle for the Rust-managed filter object.
 typedef void* FilterHandle;
@@ -108,6 +110,35 @@ TK_NODISCARD tk_error_code_t tk_sensor_fusion_update(tk_sensor_fusion_t* engine,
         return TK_ERROR_INVALID_ARGUMENT;
     }
 
+#ifdef MOCK_SENSORS
+    // Mock implementation: Simulate changing state over time.
+    static float time_elapsed = 0.0f;
+    time_elapsed += delta_time_s;
+
+    // Simulate a slow rotation around the Z-axis.
+    float angle = time_elapsed * 0.1f; // 0.1 radians per second
+    engine->world_state.orientation.w = cosf(angle / 2.0f);
+    engine->world_state.orientation.z = sinf(angle / 2.0f);
+    engine->world_state.orientation.x = 0.0f;
+    engine->world_state.orientation.y = 0.0f;
+
+
+    // Alternate between STATIONARY and WALKING every 5 seconds.
+    int time_slice = (int)(time_elapsed / 5.0f);
+    if (time_slice % 2 == 0) {
+        engine->world_state.motion_state = TK_MOTION_STATE_STATIONARY;
+    } else {
+        engine->world_state.motion_state = TK_MOTION_STATE_WALKING;
+    }
+
+    // Use system time for the timestamp.
+    // This is not perfect but good enough for a mock.
+    struct timespec ts;
+    timespec_get(&ts, TIME_UTC);
+    engine->world_state.last_update_timestamp_ns = (uint64_t)ts.tv_sec * 1000000000 + ts.tv_nsec;
+
+#else
+    // Original implementation for real hardware data.
     // Get the latest injected data
     tk_imu_data_t* imu = &engine->last_imu_data;
 
@@ -127,6 +158,7 @@ TK_NODISCARD tk_error_code_t tk_sensor_fusion_update(tk_sensor_fusion_t* engine,
 
     // TODO: Classify motion state based on accelerometer data
     engine->world_state.motion_state = TK_MOTION_STATE_STATIONARY;
+#endif
 
     return TK_SUCCESS;
 }
