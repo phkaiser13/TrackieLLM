@@ -83,6 +83,7 @@ struct tk_contextual_reasoner_s {
         tk_navigation_hazard_t *hazards;
         size_t              hazard_count;
         size_t              hazard_capacity;
+        tk_motion_state_e   motion_state; /* From sensor fusion */
         uint64_t            last_update_ns;
     } navigation_state;
 
@@ -175,6 +176,7 @@ tk_error_code_t tk_contextual_reasoner_create(tk_contextual_reasoner_t **out,
     }
 
     /* navigation state ------------------------------------------------------ */
+    r->navigation_state.motion_state = TK_MOTION_STATE_UNKNOWN;
     r->navigation_state.hazard_capacity = 32;
     r->navigation_state.hazards = calloc(r->navigation_state.hazard_capacity,
                                          sizeof(tk_navigation_hazard_t));
@@ -205,6 +207,23 @@ tk_error_code_t tk_contextual_reasoner_create(tk_contextual_reasoner_t **out,
 
     *out = r;
     tk_log_info("Contextual Reasoning Engine created");
+    return TK_SUCCESS;
+}
+
+/* ---------------------------------------------------------------------- */
+
+tk_error_code_t tk_contextual_reasoner_get_motion_state(
+    tk_contextual_reasoner_t* reasoner,
+    tk_motion_state_e* out_state)
+{
+    if (!reasoner || !out_state) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+
+    pthread_mutex_lock(&reasoner->state_mutex);
+    *out_state = reasoner->navigation_state.motion_state;
+    pthread_mutex_unlock(&reasoner->state_mutex);
+
     return TK_SUCCESS;
 }
 
@@ -527,6 +546,7 @@ tk_error_code_t tk_contextual_reasoner_get_context_summary(
     out_summary->is_navigation_active = reasoner->navigation_state.has_clear_path;
     out_summary->is_listening_for_commands = reasoner->system_state.is_listening_for_commands;
     out_summary->system_confidence = reasoner->system_state.system_confidence;
+    out_summary->user_motion_state = reasoner->navigation_state.motion_state;
     pthread_mutex_unlock(&reasoner->state_mutex);
 
     return TK_SUCCESS;
@@ -969,5 +989,45 @@ tk_error_code_t tk_contextual_reasoner_set_critical_event_cb(
     reasoner->critical_cb = cb;
     reasoner->critical_user_data = user_data;
     pthread_mutex_unlock(&reasoner->state_mutex);
+    return TK_SUCCESS;
+}
+
+/* ---------------------------------------------------------------------- */
+
+tk_error_code_t tk_contextual_reasoner_update_motion_context(
+    tk_contextual_reasoner_t* reasoner,
+    const tk_world_state_t* world_state)
+{
+    if (!reasoner || !world_state) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+
+    pthread_mutex_lock(&reasoner->state_mutex);
+
+    tk_motion_state_e old_state = reasoner->navigation_state.motion_state;
+    reasoner->navigation_state.motion_state = world_state->motion_state;
+
+    pthread_mutex_unlock(&reasoner->state_mutex);
+
+    // If the state changed, add a context item to log it.
+    if (old_state != world_state->motion_state) {
+        char description[128];
+        const char* state_str = "UNKNOWN";
+        switch(world_state->motion_state) {
+            case TK_MOTION_STATE_STATIONARY: state_str = "User is now stationary"; break;
+            case TK_MOTION_STATE_WALKING:    state_str = "User started walking"; break;
+            case TK_MOTION_STATE_RUNNING:    state_str = "User started running"; break;
+            case TK_MOTION_STATE_FALLING:    state_str = "Fall detected!"; break;
+            default: break;
+        }
+        snprintf(description, sizeof(description), "%s", state_str);
+
+        tk_contextual_reasoner_add_context_item(reasoner,
+            TK_CONTEXT_TYPE_USER_STATE,
+            TK_CONTEXT_PRIORITY_MEDIUM,
+            description,
+            NULL, 0);
+    }
+
     return TK_SUCCESS;
 }

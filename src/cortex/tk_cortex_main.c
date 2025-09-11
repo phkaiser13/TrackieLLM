@@ -1017,6 +1017,11 @@ static tk_error_code_t cortex_handle_generic_event(tk_cortex_t* cortex, const tk
             break;
         case TK_EVENT_TYPE_SENSORS:
             tk_log_info("Cortex-C: Received Sensor Event with motion state: %d", event->data.sensor_event.world_state.motion_state);
+            // Update the contextual reasoner with the new motion data.
+            tk_contextual_reasoner_update_motion_context(
+                cortex->contextual_reasoner,
+                &event->data.sensor_event.world_state
+            );
             break;
         case TK_EVENT_TYPE_NONE:
         default:

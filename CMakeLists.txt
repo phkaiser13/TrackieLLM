@@ -60,6 +60,12 @@ option(TK_ENABLE_METAL "Enable Apple Metal support for GPU acceleration (macOS/i
 option(TK_ENABLE_ROCM "Enable AMD ROCm support for GPU acceleration" OFF)
 option(TK_BUILD_TESTS "Build unit and integration tests" ON)
 option(TK_BUILD_BENCHMARKS "Build performance benchmarks" ON)
+option(TK_MOCK_SENSORS "Enable mock sensor data for testing without hardware" OFF)
+
+if(TK_MOCK_SENSORS)
+    message(STATUS "Mock sensor data is enabled.")
+    add_definitions(-DMOCK_SENSORS)
+endif()
 
 #--------------------------------------------------------------------------------
 # Compiler Flags and Warnings

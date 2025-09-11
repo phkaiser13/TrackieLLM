@@ -236,25 +236,43 @@ tk_error_code_t tk_decision_engine_process_llm_response(
         return result;
     }
     
-    // Validate each action against current context
+    // Validate and enhance actions based on context
+    bool is_moving = (context_summary->user_motion_state == TK_MOTION_STATE_WALKING ||
+                      context_summary->user_motion_state == TK_MOTION_STATE_RUNNING);
+
     for (size_t i = 0; i < response->action_count; i++) {
         tk_action_params_t* params = &response->actions[i];
+
+        // --- ENHANCEMENT: Prioritize warnings if user is moving ---
+        if (is_moving && params->type == TK_ACTION_TYPE_SPEAK) {
+            const char* text = params->params.speak.text;
+            // Check for obstacle-related keywords
+            if (text && (strstr(text, "chair") || strstr(text, "table") || strstr(text, "obstacle"))) {
+                tk_log_info("Enhancing SPEAK action to NAVIGATE_WARN due to user motion.");
+
+                // Transform the action
+                params->type = TK_ACTION_TYPE_NAVIGATE_WARN;
+
+                // Create a new warning text.
+                char new_text[256];
+                snprintf(new_text, sizeof(new_text), "Caution, %s", text);
+
+                // Free the old text and allocate the new one.
+                free(params->params.speak.text); // It's now in a union, but the pointer is the same
+                params->params.navigate_warn.warning_text = strdup(new_text);
+                if (!params->params.navigate_warn.warning_text) {
+                    tk_decision_engine_free_response(&response);
+                    pthread_mutex_unlock(&engine->engine_mutex);
+                    return TK_ERROR_OUT_OF_MEMORY;
+                }
+                params->params.navigate_warn.obstacle_id = 0; // We don't know the ID here
+            }
+        }
         
-        // Validate action parameters
+        // --- Original Validation Step ---
         if (!validate_action_params(params, context_summary)) {
             tk_log_warning("Action validation failed for action type %d", params->type);
-            
-            // Set confidence to zero to prevent execution
-            params->confidence = 0.0f;
-            
-            // Create error message
-            free(params->params.speak.text);
-            params->params.speak.text = strdup("Action validation failed - parameters invalid");
-            if (!params->params.speak.text) {
-                tk_decision_engine_free_response(&response);
-                pthread_mutex_unlock(&engine->engine_mutex);
-                return TK_ERROR_OUT_OF_MEMORY;
-            }
+            params->confidence = 0.0f; // Prevent execution
         }
     }
     

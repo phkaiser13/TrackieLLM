@@ -38,6 +38,7 @@
 #include <stdint.h>
 
 #include "utils/tk_error_handling.h"
+#include "sensors/tk_sensors_fusion.h"      // For world state
 #include "vision/tk_vision_pipeline.h"      // For vision results
 #include "navigation/tk_path_planner.h"     // For navigation data
 #include "navigation/tk_free_space_detector.h" // For space analysis
@@ -135,6 +136,7 @@ typedef struct {
     bool                is_navigation_active;
     bool                is_listening_for_commands;
     float               system_confidence;      /**< Overall system confidence in current state. */
+    tk_motion_state_e   user_motion_state;      /**< The user's current physical motion state. */
 } tk_context_summary_t;
 
 #ifdef __cplusplus
@@ -202,6 +204,19 @@ TK_NODISCARD tk_error_code_t tk_contextual_reasoner_update_navigation_context(
     const tk_free_space_analysis_t* free_space_analysis,
     const tk_obstacle_t* obstacles,
     size_t obstacle_count
+);
+
+/**
+ * @brief Updates the user's motion context with new sensor fusion data.
+ *
+ * @param[in] reasoner The contextual reasoner instance.
+ * @param[in] world_state The latest world state from the sensor fusion engine.
+ *
+ * @return TK_SUCCESS on successful update.
+ */
+TK_NODISCARD tk_error_code_t tk_contextual_reasoner_update_motion_context(
+    tk_contextual_reasoner_t* reasoner,
+    const tk_world_state_t* world_state
 );
 
 /**
@@ -300,6 +315,19 @@ TK_NODISCARD tk_error_code_t tk_contextual_reasoner_generate_context_string(
     tk_contextual_reasoner_t* reasoner,
     char** out_context_string,
     size_t max_token_budget
+);
+
+/**
+ * @brief Retrieves the user's current motion state from the reasoner.
+ *
+ * @param[in] reasoner The contextual reasoner instance.
+ * @param[out] out_state Pointer to be filled with the current motion state.
+ *
+ * @return TK_SUCCESS on success.
+ */
+TK_NODISCARD tk_error_code_t tk_contextual_reasoner_get_motion_state(
+    tk_contextual_reasoner_t* reasoner,
+    tk_motion_state_e* out_state
 );
 
 //------------------------------------------------------------------------------
