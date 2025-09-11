@@ -1,2 +1,5 @@
 add_subdirectory(internal_tools)
-add_subdirectory(gpu)
+
+if(TK_ENABLE_GPU)
+  add_subdirectory(gpu)
+endif()

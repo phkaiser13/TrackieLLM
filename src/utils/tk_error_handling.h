@@ -159,6 +159,48 @@ extern "C" {
  */
 const char* tk_error_to_string(tk_error_code_t code);
 
+/**
+ * @brief Sets a detailed, thread-local error message.
+ *
+ * This function allows a component to provide more specific, contextual
+ * information about an error beyond the generic error code. The message is
+ * stored in thread-local storage, so it will not conflict with errors
+ * generated in other threads.
+ *
+ * @param[in] fmt A printf-style format string.
+ * @param[in] ... Variadic arguments for the format string.
+ *
+ * @par Thread-Safety
+ * This function is thread-safe.
+ *
+ * @par Example
+ * @code
+ * FILE* f = fopen(filename, "r");
+ * if (!f) {
+ *     tk_error_set_detail("Failed to open file '%s': %s", filename, strerror(errno));
+ *     return TK_ERROR_FILE_NOT_FOUND;
+ * }
+ * @endcode
+ */
+void tk_error_set_detail(const char* fmt, ...);
+
+/**
+ * @brief Retrieves the last detailed, thread-local error message.
+ *
+ * Fetches the error message set by the last call to tk_error_set_detail() in
+ * the current thread.
+ *
+ * @return A pointer to the thread-local buffer containing the last error
+ *         message. The buffer's contents are valid until the next call to
+ *         tk_error_set_detail() in the same thread. Returns an empty string
+ *         if no detail has been set.
+ *
+ * @par Thread-Safety
+ * This function is thread-safe.
+ */
+const char* tk_error_get_detail(void);
+
+
 #ifdef __cplusplus
 }
 #endif

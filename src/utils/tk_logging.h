@@ -41,11 +41,12 @@ typedef enum {
  * @brief Configuration structure for the logging subsystem.
  */
 typedef struct {
-    tk_log_level_t level;       /**< The minimum log level to be processed. */
-    const char*    filename;    /**< Optional: Path to a log file. If NULL, logs are not written to a file. */
-    bool           log_to_console;/**< If true, logs will be written to stdout/stderr. */
-    bool           use_utc_time;  /**< If true, timestamps will be in UTC; otherwise, local time. */
-    bool           quiet_mode;    /**< If true, suppresses all console output regardless of other settings. */
+    tk_log_level_t level;           /**< The minimum log level to be processed. */
+    const char*    filename;        /**< Optional: Path to a log file. If NULL, logs are not written to a file. */
+    bool           log_to_console;  /**< If true, logs will be written to stdout/stderr. */
+    bool           use_utc_time;      /**< If true, timestamps will be in UTC; otherwise, local time. */
+    bool           use_json_format; /**< If true, output logs in JSON format. */
+    bool           quiet_mode;      /**< If true, suppresses all console output regardless of other settings. */
 } tk_log_config_t;
 
 #ifdef __cplusplus

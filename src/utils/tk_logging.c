@@ -99,6 +99,7 @@ TK_NODISCARD tk_error_code_t tk_log_init(const tk_log_config_t* config) {
         g_logger_state.config.filename = NULL;
         g_logger_state.config.log_to_console = true;
         g_logger_state.config.use_utc_time = false;
+        g_logger_state.config.use_json_format = false;
         g_logger_state.config.quiet_mode = false;
     }
 
@@ -156,11 +157,21 @@ void tk_log_message(tk_log_level_t level, const char* file, int line, const char
         return;
     }
 
-    // Lock to ensure the entire log write is atomic.
+    // Prepare buffers for time, the formatted message, and an escaped version for JSON.
+    char time_buf[20];
+    char message_buf[4096]; // Reasonably large buffer for the main log message.
+    char escaped_buf[8192]; // Double size to accommodate escape characters.
+
+    // 1. Format the main message body from variadic arguments into a single buffer.
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(message_buf, sizeof(message_buf), fmt, args);
+    va_end(args);
+
+    // Lock to ensure the rest of the function is atomic.
     pthread_mutex_lock(&g_logger_state.mutex);
 
-    // 1. Get current time and format it.
-    char time_buf[20]; // "YYYY-MM-DD HH:MM:SS" is 19 chars + null.
+    // 2. Get current time and format it.
     time_t raw_time = time(NULL);
     struct tm time_info;
     if (g_logger_state.config.use_utc_time) {
@@ -170,46 +181,50 @@ void tk_log_message(tk_log_level_t level, const char* file, int line, const char
     }
     strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S", &time_info);
 
-    // 2. Determine output stream and log to console if enabled.
+    // 3. Determine the output streams (console, file, or both).
+    FILE* streams[2] = {NULL, NULL};
+    int stream_count = 0;
     if (g_logger_state.config.log_to_console && !g_logger_state.config.quiet_mode) {
-        FILE* stream = (level >= TK_LOG_LEVEL_ERROR) ? stderr : stdout;
-        fprintf(stream, "[%s] [%-5s] [%s:%d (%s)] - ",
-                time_buf,
-                level_to_string(level),
-                shorten_path(file),
-                line,
-                func);
-        va_list args;
-        va_start(args, fmt);
-        vfprintf(stream, fmt, args);
-        va_end(args);
-        fprintf(stream, "\n");
-        fflush(stream);
+        streams[stream_count++] = (level >= TK_LOG_LEVEL_ERROR) ? stderr : stdout;
+    }
+    if (g_logger_state.log_file) {
+        streams[stream_count++] = g_logger_state.log_file;
     }
 
-    // 3. Log to file if enabled.
-    if (g_logger_state.log_file) {
-        fprintf(g_logger_state.log_file, "[%s] [%-5s] [%s:%d (%s)] - ",
-                time_buf,
-                level_to_string(level),
-                shorten_path(file),
-                line,
-                func);
-        va_list args;
-        va_start(args, fmt);
-        vfprintf(g_logger_state.log_file, fmt, args);
-        va_end(args);
-        fprintf(g_logger_state.log_file, "\n");
-        fflush(g_logger_state.log_file);
+    // 4. Write the formatted log to all active streams.
+    for (int i = 0; i < stream_count; ++i) {
+        if (g_logger_state.config.use_json_format) {
+            // Escape the message buffer for JSON compatibility.
+            char* d = escaped_buf;
+            const char* s = message_buf;
+            size_t remaining = sizeof(escaped_buf) - 1; // For null terminator
+            while (*s && remaining > 1) {
+                if (*s == '"' || *s == '\\') {
+                    if (remaining < 2) break; // Not enough space for escape sequence
+                    *d++ = '\\';
+                    remaining--;
+                }
+                *d++ = *s++;
+                remaining--;
+            }
+            *d = '\0';
+
+            fprintf(streams[i],
+                    "{\"timestamp\":\"%s\",\"level\":\"%s\",\"source\":\"%s:%d\",\"function\":\"%s\",\"message\":\"%s\"}\n",
+                    time_buf, level_to_string(level), shorten_path(file), line, func, escaped_buf);
+        } else {
+            fprintf(streams[i], "[%s] [%-5s] [%s:%d (%s)] - %s\n",
+                    time_buf, level_to_string(level), shorten_path(file), line, func, message_buf);
+        }
+        fflush(streams[i]);
     }
 
     // Unlock before potential exit.
     pthread_mutex_unlock(&g_logger_state.mutex);
 
-    // 4. Handle fatal errors.
+    // 5. Handle fatal errors.
     if (level == TK_LOG_LEVEL_FATAL) {
-        // Shutdown is not called here as the program is terminating immediately.
-        // The OS will clean up file handles.
+        // The OS will clean up file handles on exit.
         exit(EXIT_FAILURE);
     }
 }

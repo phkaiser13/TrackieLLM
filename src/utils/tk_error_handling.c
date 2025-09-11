@@ -139,3 +139,36 @@ const char* tk_error_to_string(tk_error_code_t code) {
     // Default case for any unhandled or invalid error codes.
     return "UNRECOGNIZED_ERROR_CODE: The provided error code is not valid or recognized.";
 }
+
+
+#include <stdarg.h>
+#include <stdio.h> // For vsnprintf
+
+// Define a thread-local buffer for detailed error messages.
+// Each thread will have its own instance of this buffer.
+// Using __thread, a common extension in GCC/Clang.
+#define TK_ERROR_DETAIL_BUFFER_SIZE 1024
+static __thread char g_error_detail_buffer[TK_ERROR_DETAIL_BUFFER_SIZE] = {0};
+
+/**
+ * @brief Implementation of tk_error_set_detail.
+ */
+void tk_error_set_detail(const char* fmt, ...) {
+    if (!fmt) {
+        g_error_detail_buffer[0] = '\0';
+        return;
+    }
+
+    va_list args;
+    va_start(args, fmt);
+    // vsnprintf is safe and prevents buffer overflows.
+    vsnprintf(g_error_detail_buffer, TK_ERROR_DETAIL_BUFFER_SIZE, fmt, args);
+    va_end(args);
+}
+
+/**
+ * @brief Implementation of tk_error_get_detail.
+ */
+const char* tk_error_get_detail(void) {
+    return g_error_detail_buffer;
+}

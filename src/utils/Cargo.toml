@@ -20,17 +20,20 @@ license = "Apache-2.0"
 # A short description of the crate's purpose.
 description = "Provides safe Rust wrappers for core C-based utilities for error handling and logging in the TrackieLLM project."
 
-
+# The source code repository.
 repository = "https://github.com/phkaiser13/trackiellm"
 
 
 [dependencies]
 # --- Crate Dependencies ---
-# This section lists all the external crates from crates.io that this package depends on.
-
 # 'thiserror' is used for ergonomic, derive-based error handling.
-# It's used in `error_utils.rs` and `lib.rs` to define the `TrackieError` and `UtilsError` enums.
-thiserror = "2.0.16"
+thiserror = "1.0"
+
+[build-dependencies]
+# --- Build-time Dependencies ---
+# 'bindgen' automatically generates Rust FFI bindings to C libraries.
+# We use it to create safe wrappers around our C error codes.
+bindgen = "0.69"
 
 [lib]
 # --- Library Target Configuration ---

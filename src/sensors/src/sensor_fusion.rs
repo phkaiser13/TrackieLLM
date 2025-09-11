@@ -3,163 +3,124 @@
  *
  * File: src/sensors/sensor_fusion.rs
  *
- * This file provides a safe Rust wrapper for the Sensor Fusion engine defined
- * in `tk_sensors_fusion.h`. The `SensorFusionService` is the high-level
- * interface that the Cortex interacts with to get a simple, coherent view of
- * the device's physical state.
+ * This file contains the core Rust-native implementation of the sensor fusion
+ * engine. It uses the `fusion-ahrs` crate to provide a robust Attitude and
+ * Heading Reference System (AHRS) for orientation tracking, and implements a
+ * custom state machine for motion classification.
  *
- * This module encapsulates all the `unsafe` FFI calls required to interact
- * with the C-based fusion engine. It manages the lifecycle of the
- * `tk_sensor_fusion_t` handle using the RAII pattern and translates between
- * rich Rust types (like `nalgebra::Quaternion`) and the plain C structs used
- * by the FFI.
- *
- * Dependencies:
- *   - crate::ffi: For the raw C function bindings.
- *   - crate::{ImuData, WorldState, SensorsError}: For shared types and errors.
- *   - thiserror: For ergonomic error handling.
+ * The main struct, `SensorFusionEngine`, holds the state for all algorithms
+ * and is the single source of truth for the device's physical state. This
+ * entire module is designed to be compiled as a static library and linked
+ * into the main C/C++ application via the FFI layer in `ffi_bridge.rs`.
  *
  * SPDX-License-Identifier: AGPL-3.0 license
  */
 
-use super::{ffi, ImuData, MotionState, SensorsError, WorldState};
-use nalgebra::Quaternion;
-use std::ptr::null_mut;
-use thiserror::Error;
+use fusion_ahrs::{Ahrs, AhrsSettings, Quaternion, Vector3};
+use nalgebra as na;
 
-/// Represents errors specific to the sensor fusion process.
-#[derive(Debug, Error)]
-pub enum FusionError {
-    /// The underlying C-level context is not initialized.
-    #[error("Sensor fusion context is not initialized.")]
-    NotInitialized,
-
-    /// An FFI call to the sensor fusion C library failed.
-    #[error("Sensor fusion FFI call failed with code: {0}")]
-    Ffi(i32),
+/// Represents the high-level classification of the user's motion.
+/// This enum mirrors the C-level `tk_motion_state_e`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[repr(C)]
+pub enum MotionState {
+    Unknown,
+    Stationary,
+    Walking,
+    Running,
+    Falling,
 }
 
-/// Configuration for the `SensorFusionService`.
-pub struct SensorFusionConfig {
-    /// The target frequency in Hz for sensor processing.
-    pub update_rate_hz: f32,
-    /// A tuning parameter for the orientation filter.
-    pub gyro_trust_factor: f32,
+/// The fused, high-level output of the sensor fusion engine.
+/// This struct mirrors the C-level `tk_world_state_t`.
+#[derive(Debug, Clone, Copy)]
+pub struct WorldState {
+    pub last_update_timestamp_ns: u64,
+    pub orientation: na::Quaternion<f32>,
+    pub motion_state: MotionState,
+    pub is_speech_detected: bool,
 }
 
-/// A safe, high-level interface to the Sensor Fusion Engine.
-pub struct SensorFusionService {
-    /// The handle to the underlying `tk_sensor_fusion_t` C object.
-    engine_handle: *mut ffi::tk_sensor_fusion_t,
+/// The main state-bearing struct for the sensor fusion engine.
+pub struct SensorFusionEngine {
+    ahrs: Ahrs,
+    motion_state: MotionState,
+    is_speech_detected: bool,
+    last_update_timestamp_ns: u64,
 }
 
-impl SensorFusionService {
-    /// Creates a new `SensorFusionService`.
-    pub fn new(config: SensorFusionConfig) -> Result<Self, SensorsError> {
-        let mut engine_handle = null_mut();
-        let c_config = ffi::tk_sensor_fusion_config_t {
-            update_rate_hz: config.update_rate_hz,
-            gyro_trust_factor: config.gyro_trust_factor,
-        };
+impl SensorFusionEngine {
+    /// Creates a new sensor fusion engine.
+    pub fn new(update_rate_hz: f32) -> Self {
+        let settings = AhrsSettings::new()
+            .gain(0.1) // A common starting point for the filter gain
+            .sample_rate(update_rate_hz as u16);
 
-        let result = unsafe { ffi::tk_sensor_fusion_create(&mut engine_handle, &c_config) };
-
-        if result != ffi::TK_SUCCESS {
-            return Err(SensorsError::Ffi(format!(
-                "Failed to create sensor fusion engine: {}",
-                result
-            )));
+        Self {
+            ahrs: Ahrs::new_with_settings(settings),
+            motion_state: MotionState::Unknown,
+            is_speech_detected: false,
+            last_update_timestamp_ns: 0,
         }
-        if engine_handle.is_null() {
-            return Err(SensorsError::NotInitialized);
-        }
-
-        Ok(Self { engine_handle })
     }
 
     /// Injects a new IMU data sample into the engine.
-    pub fn inject_imu_data(&mut self, data: &ImuData) -> Result<(), SensorsError> {
-        let c_imu_data = ffi::tk_imu_data_t {
-            timestamp_ns: 0, // Placeholder, timestamp is not used in the C code yet
-            acc_x: data.accelerometer.x,
-            acc_y: data.accelerometer.y,
-            acc_z: data.accelerometer.z,
-            gyro_x: data.gyroscope.x,
-            gyro_y: data.gyroscope.y,
-            gyro_z: data.gyroscope.z,
-            has_mag_data: data.magnetometer.is_some(),
-            mag_x: data.magnetometer.map_or(0.0, |m| m.x),
-            mag_y: data.magnetometer.map_or(0.0, |m| m.y),
-            mag_z: data.magnetometer.map_or(0.0, |m| m.z),
-        };
+    pub fn inject_imu_data(&mut self, acc: &na::Vector3<f32>, gyro: &na::Vector3<f32>, mag: &Option<na::Vector3<f32>>, delta_time_s: f32) {
+        // The fusion-ahrs library expects gyroscope data in radians/s.
+        // The tk_imu_data_t struct already provides it in this unit.
+        let gyro_rad = Vector3::new(gyro.x, gyro.y, gyro.z);
 
-        let result = unsafe { ffi::tk_sensor_fusion_inject_imu_data(self.engine_handle, &c_imu_data) };
-        if result != ffi::TK_SUCCESS {
-            return Err(SensorsError::Ffi(format!(
-                "Failed to inject IMU data: {}",
-                result
-            )));
+        // Accelerometer data is expected in g's. The tk_imu_data_t struct provides
+        // it in m/s^2. We need to convert it. 1 g ≈ 9.81 m/s^2.
+        const G_FORCE: f32 = 9.81;
+        let acc_g = Vector3::new(acc.x / G_FORCE, acc.y / G_FORCE, acc.z / G_FORCE);
+
+        if let Some(mag_data) = mag {
+            // Use magnetometer data if available (MARG update)
+            let mag_norm = Vector3::new(mag_data.x, mag_data.y, mag_data.z);
+            self.ahrs.update(&gyro_rad, &acc_g, &mag_norm).unwrap();
+        } else {
+            // Otherwise, perform an IMU update (without magnetometer)
+            self.ahrs.update_imu(&gyro_rad, &acc_g).unwrap();
         }
-        Ok(())
+
+        // --- Motion Classification Logic ---
+        // A simple classifier based on the magnitude of linear acceleration.
+        // The AHRS filter provides an estimate of gravity, which we can remove.
+        let gravity = self.ahrs.get_earth_acceleration();
+        let linear_acc = acc_g - gravity;
+        let linear_acc_magnitude = linear_acc.norm();
+
+        // Simple threshold-based state machine
+        const STATIONARY_THRESHOLD: f32 = 0.1; // in g's
+        const WALKING_THRESHOLD: f32 = 0.8;    // in g's
+
+        self.motion_state = if linear_acc_magnitude < STATIONARY_THRESHOLD {
+            MotionState::Stationary
+        } else if linear_acc_magnitude < WALKING_THRESHOLD {
+            MotionState::Walking
+        } else {
+            MotionState::Running
+        };
+        // Note: Fall detection is more complex and would require checking for
+        // a period of near-zero g followed by a large shock. This is a placeholder.
+
+        self.last_update_timestamp_ns = 0; // TODO: Plumb timestamp through
     }
 
-    /// Injects the VAD (Voice Activity Detection) state.
+    /// Injects the VAD state.
     pub fn inject_vad_state(&mut self, is_speech_active: bool) {
-        unsafe { ffi::tk_sensor_fusion_inject_vad_state(self.engine_handle, is_speech_active) };
+        self.is_speech_detected = is_speech_active;
     }
 
-    /// Processes all injected data and updates the internal world state.
-    pub fn update(&mut self, delta_time_s: f32) -> Result<(), SensorsError> {
-        let result = unsafe { ffi::tk_sensor_fusion_update(self.engine_handle, delta_time_s) };
-        if result != ffi::TK_SUCCESS {
-            return Err(SensorsError::Ffi(format!(
-                "Failed to update sensor fusion state: {}",
-                result
-            )));
-        }
-        Ok(())
-    }
-
-    /// Retrieves the latest, most up-to-date world state.
-    pub fn get_world_state(&self) -> Result<WorldState, SensorsError> {
-        let mut c_world_state: ffi::tk_world_state_t = unsafe { std::mem::zeroed() };
-        let result = unsafe { ffi::tk_sensor_fusion_get_world_state(self.engine_handle, &mut c_world_state) };
-
-        if result != ffi::TK_SUCCESS {
-            return Err(SensorsError::Ffi(format!(
-                "Failed to get world state: {}",
-                result
-            )));
-        }
-
-        let orientation = Quaternion::new(
-            c_world_state.orientation.w,
-            c_world_state.orientation.x,
-            c_world_state.orientation.y,
-            c_world_state.orientation.z,
-        );
-
-        let motion_state = match c_world_state.motion_state {
-            ffi::tk_motion_state_e::TK_MOTION_STATE_UNKNOWN => MotionState::Unknown,
-            ffi::tk_motion_state_e::TK_MOTION_STATE_STATIONARY => MotionState::Stationary,
-            ffi::tk_motion_state_e::TK_MOTION_STATE_WALKING => MotionState::Walking,
-            ffi::tk_motion_state_e::TK_MOTION_STATE_RUNNING => MotionState::Running,
-            ffi::tk_motion_state_e::TK_MOTION_STATE_FALLING => MotionState::Falling,
-        };
-
-        Ok(WorldState {
-            orientation,
-            motion_state,
-            is_speech_detected: c_world_state.is_speech_detected,
-        })
-    }
-}
-
-impl Drop for SensorFusionService {
-    /// Ensures the C-level sensor fusion engine is always destroyed.
-    fn drop(&mut self) {
-        if !self.engine_handle.is_null() {
-            unsafe { ffi::tk_sensor_fusion_destroy(&mut self.engine_handle) };
+    /// Retrieves the current world state.
+    pub fn get_world_state(&self) -> WorldState {
+        let q = self.ahrs.get_quaternion();
+        WorldState {
+            last_update_timestamp_ns: self.last_update_timestamp_ns,
+            orientation: na::Quaternion::new(q.w, q.x, q.y, q.z),
+            motion_state: self.motion_state,
+            is_speech_detected: self.is_speech_detected,
         }
     }
 }

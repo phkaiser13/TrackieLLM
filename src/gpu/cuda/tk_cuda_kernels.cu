@@ -302,6 +302,96 @@ TK_NODISCARD tk_error_code_t tk_kernels_preprocess_image(
     return TK_SUCCESS;
 }
 
+// -----------------------------------------------------------------------------
+// Softmax Kernel Implementation
+// -----------------------------------------------------------------------------
+
+// A numerically stable softmax kernel. Each thread block processes one row.
+// This requires the number of columns to be less than or equal to the max
+// thread block size (e.g., 1024).
+__global__ void tk_cuda_softmax_kernel(
+    const float* d_input,
+    float* d_output,
+    unsigned int num_cols
+) {
+    // Each block processes one row of the input tensor.
+    // The row index is given by the block index.
+    const unsigned int row_idx = blockIdx.x;
+    const unsigned int thread_idx = threadIdx.x;
+
+    // A shared memory buffer for the reduction operations within the block.
+    extern __shared__ float s_data[];
+
+    // 1. Find the maximum value in the row for numerical stability.
+    // Each thread loads one value from global memory into shared memory.
+    s_data[thread_idx] = d_input[row_idx * num_cols + thread_idx];
+    __syncthreads();
+
+    // Perform reduction in shared memory to find the max value.
+    for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (thread_idx < s) {
+            s_data[thread_idx] = fmaxf(s_data[thread_idx], s_data[thread_idx + s]);
+        }
+        __syncthreads();
+    }
+    float max_val = s_data[0];
+    __syncthreads();
+
+    // 2. Compute exp(x - max) and the sum of exponents.
+    // Each thread computes its own exponentiated value.
+    float exp_val = expf(d_input[row_idx * num_cols + thread_idx] - max_val);
+    s_data[thread_idx] = exp_val;
+    __syncthreads();
+
+    // Perform reduction in shared memory to find the sum of exponents.
+    for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (thread_idx < s) {
+            s_data[thread_idx] += s_data[thread_idx + s];
+        }
+        __syncthreads();
+    }
+    float sum_exp = s_data[0];
+    __syncthreads();
+
+    // 3. Divide each exponentiated value by the sum.
+    d_output[row_idx * num_cols + thread_idx] = exp_val / sum_exp;
+}
+
+
+// Host function to launch the softmax kernel.
+TK_NODISCARD tk_error_code_t tk_kernels_softmax(
+    const tk_softmax_params_t* params,
+    cudaStream_t stream
+) {
+    if (!params || !params->d_input_tensor || !params->d_output_tensor) {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+    if (params->num_cols > 1024) {
+        // This simple kernel requires the row size to fit in a block.
+        return TK_ERROR_NOT_IMPLEMENTED;
+    }
+
+    // The grid dimension is the number of rows.
+    dim3 grid_dim(params->num_rows);
+    // The block dimension is the number of columns (size of the softmax dimension).
+    dim3 block_dim(params->num_cols);
+    // Shared memory size is one float per thread in the block.
+    size_t shared_mem_size = params->num_cols * sizeof(float);
+
+    tk_cuda_softmax_kernel<<<grid_dim, block_dim, shared_mem_size, stream>>>(
+        (const float*)params->d_input_tensor,
+        (float*)params->d_output_tensor,
+        params->num_cols
+    );
+
+    cudaError_t launch_error = cudaGetLastError();
+    if (launch_error != cudaSuccess) {
+        return TK_ERROR_CUDA_KERNEL_LAUNCH_FAILURE;
+    }
+
+    return TK_SUCCESS;
+}
+
 // Host function to launch depth map post-processing kernel
 TK_NODISCARD tk_error_code_t tk_kernels_postprocess_depth_map(
     const tk_postprocess_depth_params_t* params,
