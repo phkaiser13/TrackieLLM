@@ -187,7 +187,12 @@ pub fn read_all_bytes(path: &Path, max_size: usize) -> Result<Vec<u8>, InternalT
         },
         ffi::TK_ERROR_FILE_NOT_FOUND => Err(FsError::NotFound(path.to_string()).into()),
         ffi::TK_ERROR_FILE_READ => Err(FsError::FileRead(path.to_string()).into()),
-        _ => super::ffi_result_from_code(code, "tk_file_read_all_bytes"),
+        _ => {
+            // Manually construct the error to match the function's return type.
+            let ffi_err = super::ffi_result_from_code(code, "tk_file_read_all_bytes");
+            // We expect an error here, so we can safely unwrap the error side.
+            Err(ffi_err.unwrap_err())
+        }
     }
 }
 

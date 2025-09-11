@@ -28,3 +28,6 @@ thiserror = "2.0.16"
 # Workspace dependency for shared utilities like safe path handling.
 # This path assumes that the 'internal_tools' crate is located at `src/internal_tools`.
 internal_tools = { path = "../internal_tools" }
+
+# Provides shared event and data structures, like `NavigationCues`.
+trackiellm_event_bus = { path = "../event_bus" }

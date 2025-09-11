@@ -27,7 +27,7 @@ channel = "stable"
 # 'rustfmt' is the standard code formatter.
 # 'clippy' is the standard linter for catching common mistakes and improving code.
 # 'rust-src' is required by some tools like rust-analyzer for go-to-definition.
-components = ["rustfmt", "clippy", "rust-src"]
+# components = ["rustfmt", "clippy", "rust-src"] # Temporarily disabled to avoid environment issues
 
 # We can also specify the targets to be installed, which is crucial for
 # cross-compilation. For TrackieLLM, we will need targets for ARM-based

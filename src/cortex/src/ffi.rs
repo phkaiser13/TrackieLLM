@@ -31,11 +31,17 @@ static REASONER: Lazy<Mutex<ContextualReasoner>> = Lazy::new(|| {
 
 // Re-export the C-level types from the main ffi_bridge crate for consistency.
 // In a larger project, these might be in a dedicated `ffi-types` crate.
-pub use trackiellm_ffi::{
-    tk_contextual_reasoner_t,
-    tk_error_code_t,
-    tk_error_code_t_TK_SUCCESS
-};
+// pub use trackiellm_ffi::{ // Temporarily disabled
+//     tk_contextual_reasoner_t,
+//     tk_error_code_t,
+//     tk_error_code_t_TK_SUCCESS
+// };
+
+// Manually define the types we need until the ffi crate is fixed
+pub enum tk_contextual_reasoner_s {}
+pub type tk_contextual_reasoner_t = tk_contextual_reasoner_s;
+pub type tk_error_code_t = i32;
+pub const tk_error_code_t_TK_SUCCESS: tk_error_code_t = 0;
 
 // FFI declarations for C functions that we need to call from this module.
 #[link(name = "trackiellm_core")]

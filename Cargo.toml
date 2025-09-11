@@ -26,6 +26,7 @@ members = [
     "src/audio",
     "src/cortex",
     "src/deployment",
+    "src/event_bus",
     "src/experiments",
     "src/ffi",
     "src/interaction",

@@ -1,0 +1,28 @@
+#
+# Copyright (C) 2025 Pedro Henrique / phdev13
+#
+# File: Cargo.toml
+#
+# Cargo manifest for the TrackieLLM monitoring crate.
+# This crate is responsible for system health checks, performance metrics
+# collection, and telemetry.
+#
+# SPDX-License-Identifier: AGPL-3.0 license
+#
+
+[package]
+name = "trackiellm_monitoring"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0"
+authors = ["Pedro Henrique / phdev13"]
+description = "System health monitoring and telemetry for TrackieLLM."
+
+[lib]
+name = "trackiellm_monitoring"
+path = "src/lib.rs"
+
+[dependencies]
+log = "0.4"
+tokio = { version = "1.0", features = ["time"] }
+sysinfo = "0.29"

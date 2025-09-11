@@ -28,6 +28,7 @@ pub struct EnrichedObject {
     pub distance_meters: f32,
     pub width_meters: f32,
     pub height_meters: f32,
+    pub is_partially_occluded: bool,
 }
 
 /// Fuses object detection results with a depth map to calculate the distance
@@ -49,6 +50,8 @@ pub fn fuse_object_and_depth_data(
     focal_length_x: f32,
     focal_length_y: f32,
 ) -> Vec<EnrichedObject> {
+    const MIN_DEPTH_POINTS_FOR_STATS: usize = 10;
+    const OCCLUSION_STD_DEV_THRESHOLD: f32 = 0.5; // in meters
 
     let depth_data = unsafe {
         slice::from_raw_parts(depth_map.data, (depth_map.width * depth_map.height) as usize)
@@ -68,16 +71,15 @@ pub fn fuse_object_and_depth_data(
         let norm_y_max = (bbox.y + bbox.h) as f32 / frame_height as f32;
 
         // Map to depth coordinates
-        let depth_x_min = (norm_x_min * (depth_map.width - 1) as f32) as u32;
-        let depth_y_min = (norm_y_min * (depth_map.height - 1) as f32) as u32;
-        let depth_x_max = (norm_x_max * (depth_map.width - 1) as f32) as u32;
-        let depth_y_max = (norm_y_max * (depth_map.height - 1) as f32) as u32;
+        let depth_x_min = (norm_x_min * (depth_map.width - 1) as f32).round() as u32;
+        let depth_y_min = (norm_y_min * (depth_map.height - 1) as f32).round() as u32;
+        let depth_x_max = (norm_x_max * (depth_map.width - 1) as f32).round() as u32;
+        let depth_y_max = (norm_y_max * (depth_map.height - 1) as f32).round() as u32;
 
         // Boundary checks
         if depth_x_min >= depth_map.width || depth_y_min >= depth_map.height ||
            depth_x_max >= depth_map.width || depth_y_max >= depth_map.height ||
            depth_x_min >= depth_x_max || depth_y_min >= depth_y_max {
-
             enriched_objects.push(EnrichedObject {
                 class_id: detection.class_id,
                 confidence: detection.confidence,
@@ -85,39 +87,70 @@ pub fn fuse_object_and_depth_data(
                 distance_meters: -1.0,
                 width_meters: -1.0,
                 height_meters: -1.0,
+                is_partially_occluded: false,
             });
             continue;
         }
 
-        // Focus on the central 25% of the bounding box
-        let center_width = depth_x_max - depth_x_min;
-        let center_height = depth_y_max - depth_y_min;
-        let crop_margin_x = center_width / 4;
-        let crop_margin_y = center_height / 4;
-        
-        let center_x_min = depth_x_min + crop_margin_x;
-        let center_y_min = depth_y_min + crop_margin_y;
-        let center_x_max = depth_x_max - crop_margin_x;
-        let center_y_max = depth_y_max - crop_margin_y;
-
-        // Collect valid depth values from the central region
+        // Collect valid depth values from the entire bounding box
         let mut valid_depths = Vec::new();
-        for y in center_y_min..=center_y_max {
-            for x in center_x_min..=center_x_max {
+        for y in depth_y_min..=depth_y_max {
+            for x in depth_x_min..=depth_x_max {
                 let index = (y * depth_map.width + x) as usize;
-                let depth_value = depth_data[index];
-                if depth_value > 0.0 && depth_value < 100.0 { // Reasonable range
-                    valid_depths.push(depth_value);
+                if index < depth_data.len() {
+                    let depth_value = depth_data[index];
+                    if depth_value > 0.1 && depth_value < 100.0 { // Reasonable range
+                        valid_depths.push(depth_value);
+                    }
                 }
             }
         }
 
         let mut robust_distance = -1.0;
-        if !valid_depths.is_empty() {
-            // Sort to find the minimum (closest point)
+        let mut is_occluded = false;
+
+        if valid_depths.len() >= MIN_DEPTH_POINTS_FOR_STATS {
+            // Sort to calculate median and IQR
             valid_depths.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-            robust_distance = valid_depths[0];
+
+            // --- Outlier removal using IQR ---
+            let q1_index = valid_depths.len() / 4;
+            let q3_index = valid_depths.len() * 3 / 4;
+            let q1 = valid_depths[q1_index];
+            let q3 = valid_depths[q3_index];
+            let iqr = q3 - q1;
+            let lower_bound = q1 - 1.5 * iqr;
+            let upper_bound = q3 + 1.5 * iqr;
+
+            let filtered_depths: Vec<f32> = valid_depths
+                .into_iter()
+                .filter(|&d| d >= lower_bound && d <= upper_bound)
+                .collect();
+
+            if !filtered_depths.is_empty() {
+                // --- Calculate robust distance (mean of filtered depths) ---
+                let sum: f32 = filtered_depths.iter().sum();
+                robust_distance = sum / filtered_depths.len() as f32;
+
+                // --- Occlusion detection based on standard deviation ---
+                let mean = robust_distance;
+                let variance = filtered_depths.iter().map(|value| {
+                    let diff = mean - *value;
+                    diff * diff
+                }).sum::<f32>() / filtered_depths.len() as f32;
+                let std_dev = variance.sqrt();
+
+                if std_dev > OCCLUSION_STD_DEV_THRESHOLD {
+                    is_occluded = true;
+                }
+            }
+        } else if !valid_depths.is_empty() {
+            // Fallback for when there are not enough points for statistical analysis
+            // We use the median in this case, which is more robust than the mean with few points.
+            let median_index = valid_depths.len() / 2;
+            robust_distance = valid_depths[median_index];
         }
+
 
         let mut width_meters = -1.0;
         let mut height_meters = -1.0;
@@ -134,6 +167,7 @@ pub fn fuse_object_and_depth_data(
             distance_meters: robust_distance,
             width_meters,
             height_meters,
+            is_partially_occluded: is_occluded,
         });
     }
 

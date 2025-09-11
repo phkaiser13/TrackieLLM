@@ -1,0 +1,26 @@
+#
+# Copyright (C) 2025 Pedro Henrique / phdev13
+#
+# File: Cargo.toml
+#
+# Cargo manifest for the TrackieLLM experiments crate.
+# This crate is intended for benchmarking, model comparison, and other
+# experimental code that is not part of the core application.
+#
+# SPDX-License-Identifier: AGPL-3.0 license
+#
+
+[package]
+name = "trackiellm_experiments"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0"
+authors = ["Pedro Henrique / phdev13"]
+description = "Benchmarking and experimental code for TrackieLLM."
+
+[lib]
+name = "trackiellm_experiments"
+path = "src/lib.rs"
+
+[dependencies]
+log = "0.4"
