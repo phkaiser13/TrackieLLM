@@ -36,7 +36,6 @@
 
 #include "utils/tk_error_handling.h"
 #include "internal_tools/tk_file_manager.h" // For tk_path_t
-#include "vision/tk_vision_pipeline.h" // For tk_vision_object_t
 #include "sensors/tk_sensors_fusion.h" // For tk_world_state_t
 
 // Forward-declare the main Cortex object as an opaque type to enforce encapsulation.
@@ -96,7 +95,7 @@ typedef struct {
  * @struct tk_video_frame_t
  * @brief Represents a single frame of video data to be injected into the Cortex.
  */
-typedef struct {
+typedef struct tk_video_frame_s {
     uint32_t width;                 /**< Frame width in pixels. */
     uint32_t height;                /**< Frame height in pixels. */
     uint32_t stride;                /**< Number of bytes per row of pixels. */
@@ -314,6 +313,22 @@ TK_NODISCARD tk_error_code_t tk_cortex_inject_sensor_event(tk_cortex_t* cortex, 
  * @return TK_SUCCESS on success.
  */
 TK_NODISCARD tk_error_code_t tk_cortex_get_state(const tk_cortex_t* cortex, tk_system_state_e* out_state);
+
+
+//------------------------------------------------------------------------------
+// Internal Component Access (for testing)
+//------------------------------------------------------------------------------
+
+/**
+ * @brief Retrieves a pointer to the internal Contextual Reasoner instance.
+ *
+ * NOTE: This function is intended for testing purposes only.
+ * Do not use in production code.
+ *
+ * @param[in] cortex The Cortex instance.
+ * @return A pointer to the tk_contextual_reasoner_t instance, or NULL if cortex is invalid.
+ */
+tk_contextual_reasoner_t* tk_cortex_get_contextual_reasoner(tk_cortex_t* cortex);
 
 
 #ifdef __cplusplus

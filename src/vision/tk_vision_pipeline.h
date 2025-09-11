@@ -37,6 +37,11 @@
 #include "utils/tk_error_handling.h"
 #include "internal_tools/tk_file_manager.h" // For tk_path_t
 
+// Forward-declare the video frame struct to avoid circular dependencies
+// with tk_cortex_main.h, where it is fully defined.
+struct tk_video_frame_s;
+typedef struct tk_video_frame_s tk_video_frame_t;
+
 // Forward-declare the primary pipeline and result objects as opaque types.
 typedef struct tk_vision_pipeline_s tk_vision_pipeline_t;
 typedef struct tk_vision_result_s tk_vision_result_t;

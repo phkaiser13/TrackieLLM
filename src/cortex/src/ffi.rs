@@ -60,6 +60,11 @@ extern "C" {
         max_token_budget: usize,
     ) -> tk_error_code_t;
 
+    pub fn tk_contextual_reasoner_get_context_summary(
+        reasoner: *mut tk_contextual_reasoner_t,
+        out_summary: *mut tk_context_summary_t,
+    ) -> tk_error_code_t;
+
     // From the FFI bridge, which forwards to the C implementation.
     fn tk_get_last_error() -> *const c_char;
 }
@@ -100,6 +105,46 @@ pub enum tk_motion_state_e {
 }
 
 #[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum tk_ambient_sound_type_e {
+    TK_AMBIENT_SOUND_NONE,
+    TK_AMBIENT_SOUND_FIRE_ALARM,
+    TK_AMBIENT_SOUND_CAR_HORN,
+    TK_AMBIENT_SOUND_SIREN,
+    TK_AMBIENT_SOUND_BABY_CRYING,
+    TK_AMBIENT_SOUND_DOORBELL,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum tk_navigation_cue_type_e {
+    TK_NAVIGATION_CUE_NONE,
+    TK_NAVIGATION_CUE_STEP_UP,
+    TK_NAVIGATION_CUE_STEP_DOWN,
+    TK_NAVIGATION_CUE_DOORWAY,
+    TK_NAVIGATION_CUE_STAIRS_UP,
+    TK_NAVIGATION_CUE_STAIRS_DOWN,
+}
+
+// A placeholder, as the full definition is in another header.
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct tk_navigation_hazard_t {
+    pub hazard_id: u32,
+    pub description: *const c_char,
+    pub distance_m: f32,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct tk_conversation_turn_t {
+    pub timestamp_ns: u64,
+    pub is_user_input: bool,
+    pub content: *const c_char,
+    pub confidence: f32,
+}
+
+#[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct tk_rect_t {
     pub x: ::std::os::raw::c_int,
@@ -118,6 +163,38 @@ pub struct tk_vision_object_t {
     pub distance_meters: f32,
     pub width_meters: f32,
     pub height_meters: f32,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct tk_context_summary_t {
+    // Environmental awareness
+    pub visible_object_count: usize,
+    pub visible_objects: *const tk_vision_object_t,
+
+    // Navigation state
+    pub has_clear_path: bool,
+    pub clear_path_direction_deg: f32,
+    pub clear_path_distance_m: f32,
+    pub hazard_count: usize,
+    pub hazards: *const tk_navigation_hazard_t,
+
+    // Recent conversation
+    pub conversation_turn_count: usize,
+    pub recent_conversation: *const tk_conversation_turn_t,
+
+    // Temporal context
+    pub recent_events_summary: *const c_char,
+
+    // System state
+    pub is_navigation_active: bool,
+    pub is_listening_for_commands: bool,
+    pub system_confidence: f32,
+    pub user_motion_state: tk_motion_state_e,
+
+    // New fields
+    pub detected_sound_type: tk_ambient_sound_type_e,
+    pub detected_navigation_cue: tk_navigation_cue_type_e,
 }
 
 #[repr(C)]
@@ -293,15 +370,37 @@ pub unsafe extern "C" fn tk_cortex_reasoner_run_rules(
 pub unsafe extern "C" fn tk_cortex_generate_prompt(
     prompt_buffer: *mut ::std::os::raw::c_char,
     buffer_size: usize,
+    user_query: *const c_char,
 ) -> bool {
     if prompt_buffer.is_null() || buffer_size == 0 {
         return false;
     }
 
-    let reasoner = REASONER.lock().unwrap();
+    let mut reasoner = REASONER.lock().unwrap();
+
+    let query_str = if user_query.is_null() {
+        ""
+    } else {
+        match CStr::from_ptr(user_query).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                println!("[TrackieLLM-Rust-FFI]: Invalid UTF-8 in user_query for generate_prompt.");
+                ""
+            }
+        }
+    };
 
     // Generate the prompt from the reasoner's world model.
-    let prompt_string = reasoner.generate_environment_summary_prompt();
+    let prompt_result = reasoner.generate_prompt_for_llm(query_str);
+
+    let prompt_string = match prompt_result {
+        Ok(s) => s,
+        Err(e) => {
+            println!("[TrackieLLM-Rust-FFI]: Error generating prompt: {}", e);
+            // Provide a fallback prompt
+            "An error occurred. Please describe the general situation.".to_string()
+        }
+    };
 
     let c_string = match CString::new(prompt_string) {
         Ok(s) => s,
@@ -318,4 +417,35 @@ pub unsafe extern "C" fn tk_cortex_generate_prompt(
     *prompt_buffer.add(buffer_size - 1) = 0;
 
     true
+}
+
+/// Sets a fact in the Rust-side `MemoryManager`.
+///
+/// # Safety
+/// `key` and `value` must be valid, null-terminated C strings.
+#[no_mangle]
+pub unsafe extern "C" fn tk_cortex_rust_set_fact(key: *const c_char, value: *const c_char) {
+    if key.is_null() || value.is_null() {
+        return;
+    }
+
+    let key_str = match CStr::from_ptr(key).to_str() {
+        Ok(s) => s,
+        Err(_) => {
+            println!("[TrackieLLM-Rust-FFI]: Invalid UTF-8 in key for set_fact.");
+            return;
+        }
+    };
+
+    let value_str = match CStr::from_ptr(value).to_str() {
+        Ok(s) => s,
+        Err(_) => {
+            println!("[TrackieLLM-Rust-FFI]: Invalid UTF-8 in value for set_fact.");
+            return;
+        }
+    };
+
+    let mut reasoner = REASONER.lock().unwrap();
+    reasoner.memory_manager.set_fact(key_str, value_str);
+    println!("[TrackieLLM-Rust-FFI]: Set fact '{}' = '{}'", key_str, value_str);
 }

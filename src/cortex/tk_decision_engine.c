@@ -68,8 +68,16 @@ struct tk_decision_engine_s {
 // Global atomic counter for action IDs
 static atomic_uint_fast64_t g_action_counter = ATOMIC_VAR_INIT(1);
 
+// Cooldown flags for proactive alerts to prevent spamming.
+// In a real system, this would be a more robust timestamp-based mechanism.
+static bool g_fall_alert_sent = false;
+static bool g_fire_alert_sent = false;
+
+
 // Forward-declare the Rust FFI function for generating prompts
-extern bool tk_cortex_generate_prompt(char* prompt_buffer, size_t buffer_size);
+extern bool tk_cortex_generate_prompt(char* prompt_buffer, size_t buffer_size, const char* user_query);
+// Forward-declare the Rust FFI function for setting facts in memory
+extern void tk_cortex_rust_set_fact(const char* key, const char* value);
 
 
 //-----------------------------------------------------------------------------
@@ -271,8 +279,30 @@ tk_error_code_t tk_decision_engine_process_llm_response(
         
         // --- Original Validation Step ---
         if (!validate_action_params(params, context_summary)) {
-            tk_log_warning("Action validation failed for action type %d", params->type);
-            params->confidence = 0.0f; // Prevent execution
+            tk_log_warning("Action validation failed for action type %d.", params->type);
+
+            // --- SAFETY VETO REPLACEMENT ---
+            // If a navigation guide action was vetoed, replace it with a warning.
+            if (params->type == TK_ACTION_TYPE_NAVIGATE_GUIDE) {
+                tk_log_info("Replacing vetoed NAVIGATE_GUIDE action with a warning.");
+
+                // Free the old parameters
+                free(params->params.navigate_guide.instruction);
+
+                // Morph the action into a SPEAK action
+                params->type = TK_ACTION_TYPE_SPEAK;
+                params->params.speak.text = strdup("Eu ia sugerir virar à direita, mas detectei um obstáculo nesse caminho.");
+                if (!params->params.speak.text) {
+                     tk_decision_engine_free_response(&response);
+                     pthread_mutex_unlock(&engine->engine_mutex);
+                     return TK_ERROR_OUT_OF_MEMORY;
+                }
+                params->params.speak.priority = TK_RESPONSE_PRIORITY_HIGH;
+                params->confidence = 1.0f; // Ensure the warning is spoken
+            } else {
+                // For other failed validations, just prevent execution.
+                params->confidence = 0.0f;
+            }
         }
     }
     
@@ -427,12 +457,63 @@ tk_error_code_t tk_decision_engine_queue_action(
     return TK_SUCCESS;
 }
 
-tk_error_code_t tk_decision_engine_cancel_action(
+tk_error_code_t tk_decision_engine_process_actions(
     tk_decision_engine_t* engine,
-    uint64_t action_id) {
+    uint64_t current_time_ns,
+    const tk_context_summary_t* context,
+    void* audio_ctx,
+    void* nav_ctx,
+    void* reasoner_ctx) {
     
-    if (!engine) {
+    if (!engine || !context) {
         return TK_ERROR_INVALID_ARGUMENT;
+    }
+
+    // --- Proactive Safety Triggers ---
+    // These checks run before any other action processing to ensure immediate response.
+
+    // 1. Fall Detection Trigger
+    if (context->user_motion_state == TK_MOTION_STATE_FALLING && !g_fall_alert_sent) {
+        tk_log_warning("PROACTIVE TRIGGER: Fall detected!");
+        g_fall_alert_sent = true; // Set cooldown flag
+
+        tk_action_params_t params = {
+            .type = TK_ACTION_TYPE_EMERGENCY_ALERT,
+            .confidence = 1.0f,
+            .params.emergency_alert = {
+                .alert_message = strdup("Queda detectada! Você está bem?"),
+                .repeat_alert = true,
+                .repeat_interval_ms = 5000
+            }
+        };
+        uint64_t action_id;
+        // We call the public API which handles locking internally.
+        tk_decision_engine_queue_action(engine, &params, &action_id);
+        free(params.params.emergency_alert.alert_message); // free our copy
+    } else if (context->user_motion_state != TK_MOTION_STATE_FALLING) {
+        g_fall_alert_sent = false; // Reset flag when user is no longer falling
+    }
+
+    // 2. Fire Alarm Trigger
+    if (context->detected_sound_type == TK_AMBIENT_SOUND_FIRE_ALARM && !g_fire_alert_sent) {
+        tk_log_warning("PROACTIVE TRIGGER: Fire alarm detected!");
+        g_fire_alert_sent = true; // Set cooldown flag
+
+        // Clear all other pending actions to prioritize evacuation.
+        tk_decision_engine_emergency_stop(engine);
+
+        tk_action_params_t params = {
+            .type = TK_ACTION_TYPE_EMERGENCY_ALERT,
+            .confidence = 1.0f,
+            .params.emergency_alert = {
+                .alert_message = strdup("Alarme de incêndio detectado! Por favor, evacue a área com cuidado."),
+                .repeat_alert = true,
+                .repeat_interval_ms = 7000
+            }
+        };
+        uint64_t action_id;
+        tk_decision_engine_queue_action(engine, &params, &action_id);
+        free(params.params.emergency_alert.alert_message); // free our copy
     }
     
     pthread_mutex_lock(&engine->engine_mutex);
@@ -518,8 +599,34 @@ tk_error_code_t tk_decision_engine_process_actions(
     void* nav_ctx,
     void* reasoner_ctx) {
     
-    if (!engine) {
+    if (!engine || !context) {
         return TK_ERROR_INVALID_ARGUMENT;
+    }
+
+    // --- Proactive Safety Triggers ---
+    if (context->user_motion_state == TK_MOTION_STATE_FALLING && !g_fall_alert_sent) {
+        tk_log_warning("PROACTIVE TRIGGER: Fall detected!");
+        g_fall_alert_sent = true;
+        tk_action_params_t params = { .type = TK_ACTION_TYPE_EMERGENCY_ALERT, .confidence = 1.0f };
+        params.params.emergency_alert.alert_message = strdup("Queda detectada! Você está bem?");
+        params.params.emergency_alert.repeat_alert = true;
+        uint64_t action_id;
+        tk_decision_engine_queue_action(engine, &params, &action_id);
+        free(params.params.emergency_alert.alert_message);
+    } else if (context->user_motion_state != TK_MOTION_STATE_FALLING) {
+        g_fall_alert_sent = false;
+    }
+
+    if (context->detected_sound_type == TK_AMBIENT_SOUND_FIRE_ALARM && !g_fire_alert_sent) {
+        tk_log_warning("PROACTIVE TRIGGER: Fire alarm detected!");
+        g_fire_alert_sent = true;
+        tk_decision_engine_emergency_stop(engine);
+        tk_action_params_t params = { .type = TK_ACTION_TYPE_EMERGENCY_ALERT, .confidence = 1.0f };
+        params.params.emergency_alert.alert_message = strdup("Alarme de incêndio detectado! Por favor, evacue a área com cuidado.");
+        params.params.emergency_alert.repeat_alert = true;
+        uint64_t action_id;
+        tk_decision_engine_queue_action(engine, &params, &action_id);
+        free(params.params.emergency_alert.alert_message);
     }
     
     pthread_mutex_lock(&engine->engine_mutex);
@@ -1085,12 +1192,15 @@ static bool validate_action_params(const tk_action_params_t* params, const tk_co
     
     // Context-aware validation (if context is provided)
     if (context) {
-        // Example: Check if navigation actions are valid given current context
+        // --- NAVIGATION VETO ---
         if (params->type == TK_ACTION_TYPE_NAVIGATE_GUIDE) {
-            // Only allow navigation guidance if there's a clear path
+            // Veto any navigation guidance if the path is not clear.
             if (!context->has_clear_path) {
+                tk_log_warning("SAFETY VETO: NAVIGATE_GUIDE action vetoed due to unclear path.");
                 return false;
             }
+            // A more advanced check could be added here to check the specific direction
+            // against the `context->clear_path_direction_deg` and `context->hazards`.
         }
         
         // Example: Check if object description is valid
@@ -1318,12 +1428,24 @@ static tk_error_code_t execute_single_action(tk_decision_engine_t* engine, tk_ac
             // In real implementation: change_system_mode(...)
             break;
             
-        case TK_ACTION_TYPE_SYSTEM_SETTING:
-            tk_log_info("Executing SYSTEM_SETTING action: %s = %s", 
-                       action->params.params.system_setting.setting_name,
-                       action->params.params.system_setting.setting_value);
-            // In real implementation: update_system_setting(...)
+        case TK_ACTION_TYPE_SYSTEM_SETTING: {
+            const char* key = action->params.params.system_setting.setting_name;
+            const char* value = action->params.params.system_setting.setting_value;
+            tk_log_info("Executing SYSTEM_SETTING action: %s = %s", key, value);
+
+            // Call the Rust FFI function to update the long-term memory
+            if (key && value) {
+                // A special case for learning the user's name
+                if (strcmp(key, "user_name") == 0) {
+                     tk_cortex_rust_set_fact(key, value);
+                }
+                // Another special case for volume preference, etc.
+                else if (strcmp(key, "volume_preference") == 0) {
+                     tk_cortex_rust_set_fact(key, value);
+                }
+            }
             break;
+        }
             
         case TK_ACTION_TYPE_USER_QUERY_RESPONSE: {
             if (!audio_ctx) {
@@ -1848,7 +1970,8 @@ tk_error_code_t tk_decision_engine_describe_environment(
 
     // 1. Get prompt from Rust
     char prompt_buffer[1024];
-    if (!tk_cortex_generate_prompt(prompt_buffer, sizeof(prompt_buffer))) {
+    // For a proactive description, we pass a NULL user query.
+    if (!tk_cortex_generate_prompt(prompt_buffer, sizeof(prompt_buffer), NULL)) {
         tk_log_error("Failed to generate prompt from Rust reasoner.");
         return TK_ERROR_INTERNAL_FAILURE;
     }

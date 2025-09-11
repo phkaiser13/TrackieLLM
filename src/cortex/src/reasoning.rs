@@ -424,78 +424,71 @@ impl ContextualReasoner {
         None
     }
 
-    /// Generates a prompt for the LLM based on the current world model.
+    /// Generates a prompt for the LLM based on the complete context from the C-side reasoner.
     ///
-    /// This function summarizes the tracked objects into a natural language
-    /// sentence that can be fed to the LLM to ask for a description of the
-    /// environment.
-    pub fn generate_environment_summary_prompt(&mut self) -> String {
-        const MENTION_COOLDOWN_SECS: i64 = 60; // Consider an object "new" if not mentioned in the last minute.
-
-        if self.world_model.objects.is_empty() {
-            return "You are in an environment with no detected objects. What should you say?".to_string();
+    /// This function fetches the latest context summary, which includes environmental,
+    /// navigational, and user state information, and synthesizes it into a
+    /// prioritized, natural language prompt for the LLM.
+    pub fn generate_prompt_for_llm(&mut self, user_query: &str) -> Result<String, CortexError> {
+        if self.ptr.is_null() {
+            return Err(CortexError::from(ReasoningError::NotInitialized));
         }
 
-        let mut new_objects = Vec::new();
-        let mut mentioned_objects = Vec::new();
-
-        for object in &self.world_model.objects {
-            if self.memory_manager.short_term_memory.was_object_mentioned_recently(object.id, MENTION_COOLDOWN_SECS) {
-                mentioned_objects.push(object);
-            } else {
-                new_objects.push(object);
-            }
-        }
-
-        // After generating the prompt, we will have "mentioned" the new objects.
-        for object in &new_objects {
-            self.memory_manager.short_term_memory.record_object_mentioned(object.id);
-        }
-
-        // Helper closure to create a descriptive list string from a list of objects.
-        let create_list_string = |objects: Vec<&&TrackedObject>| -> String {
-            if objects.is_empty() {
-                return String::new();
-            }
-            let mut counts = std::collections::HashMap::new();
-            for obj in objects {
-                *counts.entry(obj.label.clone()).or_insert(0) += 1;
-            }
-            let mut descriptions: Vec<String> = counts
-                .into_iter()
-                .map(|(label, count)| match count {
-                    1 => format!("a {}", label),
-                    _ => format!("{} {}s", count, label),
-                })
-                .collect();
-
-            if descriptions.len() > 1 {
-                let last = descriptions.pop().unwrap_or_default();
-                format!("{}, and {}", descriptions.join(", "), last)
-            } else {
-                descriptions.get(0).cloned().unwrap_or_default()
-            }
+        // 1. Fetch the summary from the C side.
+        // We use `MaybeUninit` to safely create an uninitialized instance of the C struct.
+        let mut summary_c: std::mem::MaybeUninit<ffi::tk_context_summary_t> = std::mem::MaybeUninit::uninit();
+        let status = unsafe {
+            ffi::tk_contextual_reasoner_get_context_summary(self.ptr, summary_c.as_mut_ptr())
         };
 
-        let new_list_str = create_list_string(new_objects);
-        let mentioned_list_str = create_list_string(mentioned_objects);
-
-        let mut prompt_parts = Vec::new();
-        if !mentioned_list_str.is_empty() {
-            prompt_parts.push(format!("You are still seeing {}.", mentioned_list_str));
-        }
-        if !new_list_str.is_empty() {
-            prompt_parts.push(format!("You have now also spotted {}.", new_list_str));
+        if status != ffi::tk_error_code_t_TK_SUCCESS {
+            return Err(CortexError::from(ReasoningError::Ffi(ffi::get_last_error_message())));
         }
 
-        if prompt_parts.is_empty() {
-             "You are in an environment with no detected objects. What should you say?".to_string()
-        } else {
-            format!(
-                "{} Based on this, describe the current situation to the user.",
-                prompt_parts.join(" ")
-            )
+        // By this point, the C function has initialized the struct, so it's safe to assume it's initialized.
+        let summary = unsafe { summary_c.assume_init() };
+
+        // 2. Build the prompt string, prioritizing critical information.
+        let mut prompt = String::new();
+
+        // --- Critical Alerts ---
+        if summary.detected_sound_type == ffi::tk_ambient_sound_type_e::TK_AMBIENT_SOUND_FIRE_ALARM {
+            prompt.push_str("URGENTE: ALARME DE INCÊNDIO DETECTADO. ");
         }
+        if summary.user_motion_state == ffi::tk_motion_state_e::TK_MOTION_STATE_FALLING {
+            prompt.push_str("URGENTE: QUEDA DO USUÁRIO DETECTADA. ");
+        }
+
+        // --- Navigational Cues ---
+        let nav_cue_str = match summary.detected_navigation_cue {
+            ffi::tk_navigation_cue_type_e::TK_NAVIGATION_CUE_STEP_DOWN => "Há um degrau para baixo à frente. ",
+            ffi::tk_navigation_cue_type_e::TK_NAVIGATION_CUE_STEP_UP => "Há um degrau para cima à frente. ",
+            ffi::tk_navigation_cue_type_e::TK_NAVIGATION_CUE_STAIRS_DOWN => "Há escadas para baixo à frente. ",
+            ffi::tk_navigation_cue_type_e::TK_NAVIGATION_CUE_STAIRS_UP => "Há escadas para cima à frente. ",
+            _ => "",
+        };
+        prompt.push_str(nav_cue_str);
+
+        // --- Motion State ---
+        let motion_str = match summary.user_motion_state {
+            ffi::tk_motion_state_e::TK_MOTION_STATE_WALKING => "O usuário está andando. ",
+            ffi::tk_motion_state_e::TK_MOTION_STATE_RUNNING => "O usuário está correndo. ",
+            _ => "O usuário está parado. "
+        };
+        prompt.push_str(motion_str);
+
+        // --- Long-Term Memory ---
+        if let Some(name) = self.memory_manager.get_fact("user_name") {
+             prompt.push_str(&format!("O nome do usuário é {}. ", name));
+        }
+
+        // --- User's Question ---
+        prompt.push_str(&format!("O usuário perguntou: '{}'. ", user_query));
+
+        // --- Final Instruction ---
+        prompt.push_str("Com base em tudo isso, qual a ação mais segura e útil?");
+
+        Ok(prompt)
     }
 }
 
