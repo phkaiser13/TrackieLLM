@@ -23,11 +23,6 @@ Supported deployment targets:
 * Hybrid: device + phone (SpotWay model described below)
 
 ---
-## Notes:
-**The TrackieLLM project is at a stage where the "skeleton" and "floorplan" are complete and of high quality. Current and future work is focused on "filling" this skeleton with functional logic that will make the system behave intelligently and proactively, as described in the project mission: "to bring intelligent accessibility (...) through cutting-edge AI and affordable hardware."**
-
-***O projeto TrackieLLM está em uma fase onde o "esqueleto" e a "planta baixa" estão completos e são de alta qualidade. O trabalho atual e futuro está focado em "preencher" esse esqueleto com a lógica funcional que fará o sistema se comportar de maneira inteligente e proativa, conforme descrito na missão do projeto: "levar acessibilidade inteligente (...) por meio de IA de ponta e hardware acessível".***
-
 
 ---
 ## 🧭 New Product Variants & Form Factors
